@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>Crosstown Pest Control – DoorDrop</title>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAp6d-4yrzB5RL3v-aBchv0pRXphB7a1yY&callback=onGoogleMapsReady" async defer></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#0c0f0a;color:#e8ede4;font-family:'Segoe UI',system-ui,sans-serif}
+:root{
+  --green:#4caf50;--green-bright:#66bb6a;--green-dim:#388e3c;
+  --green-bg:rgba(76,175,80,0.13);--green-border:rgba(76,175,80,0.32);
+  --orange:#ff8f00;--orange-bg:rgba(255,143,0,0.13);--orange-border:rgba(255,143,0,0.3);
+  --red:#e53935;--red-bg:rgba(229,57,53,0.15);--red-border:rgba(229,57,53,0.35);
+  --surface:#141a11;--surface2:#1c2418;--surface3:#242e1e;
+  --border:rgba(255,255,255,0.07);--text2:rgba(232,237,228,0.55);
+}
+#pinScreen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;background:radial-gradient(ellipse at 50% 0%,#1a2e14 0%,#0c0f0a 65%);z-index:9999;overflow-y:auto}
+.brand{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center}
+.brand-bug{font-size:44px;line-height:1}
+.brand-name{font-size:22px;font-weight:700;color:#fff}
+.brand-name span{color:var(--green-bright)}
+.brand-sub{font-size:12px;color:var(--text2);letter-spacing:1.5px;text-transform:uppercase}
+.brand-loc{font-size:12px;color:var(--orange);display:flex;align-items:center;gap:4px;margin-top:2px}
+.pin-box{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px 24px;width:100%;max-width:340px;text-align:center}
+.pin-box h2{font-size:14px;color:var(--text2);font-weight:400;margin-bottom:4px}
+.pin-dots{display:flex;justify-content:center;gap:14px;margin:16px 0}
+.pin-dot{width:13px;height:13px;border-radius:50%;border:2px solid rgba(255,255,255,0.18);transition:all .15s}
+.pin-dot.filled{background:var(--green-bright);border-color:var(--green-bright)}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:14px}
+.pin-btn{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:15px;font-size:18px;font-weight:500;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pin-btn:active{transform:scale(.95);background:var(--surface3)}
+.pin-error{color:var(--red);font-size:12px;min-height:16px;margin-top:6px}
+.rep-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;color:#fff;font-size:15px;margin-bottom:14px;appearance:none;cursor:pointer}
+#app{display:none;flex-direction:column;position:fixed;inset:0}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;z-index:500}
+.topbar-logo{font-size:15px;font-weight:700;color:#fff}
+.topbar-logo span{color:var(--green-bright)}
+.topbar-sub{font-size:10px;color:var(--text2);letter-spacing:.8px;text-transform:uppercase;line-height:1}
+.rep-badge{background:var(--green-bg);border:1px solid var(--green-border);color:var(--green-bright);border-radius:7px;padding:3px 9px;font-size:12px;font-weight:600}
+.counter-pill{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:3px 9px;font-size:12px;color:var(--text2)}
+.counter-pill strong{color:#fff}
+.btn-sm{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:5px 10px;font-size:12px;color:var(--text2);cursor:pointer}
+.streak-badge{display:flex;align-items:center;gap:5px;background:var(--orange-bg);border:1px solid var(--orange-border);border-radius:7px;padding:3px 9px;font-size:11px;color:var(--orange);font-weight:700}
+.tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{flex:1;padding:9px;text-align:center;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;text-transform:uppercase;letter-spacing:.3px;-webkit-tap-highlight-color:transparent}
+.tab.active{color:var(--green-bright);border-bottom-color:var(--green-bright)}
+.view{flex:1;display:none;flex-direction:column;overflow:hidden;min-height:0;position:relative}
+.view.active{display:flex}
+#map-container{flex:1;width:100%;position:relative;min-height:0}
+#gmap{position:absolute;inset:0;width:100%;height:100%}
+.map-legend{position:absolute;top:10px;left:10px;z-index:100;background:rgba(20,26,17,.93);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:11px;pointer-events:none}
+.legend-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;color:var(--text2);line-height:1.3}
+.legend-row:last-child{margin-bottom:0}
+.legend-dot{width:10px;height:10px;border-radius:50%;border:1.5px solid rgba(255,255,255,.4);flex-shrink:0}
+.log-btn-wrap{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);z-index:100;display:flex;flex-direction:column;align-items:center;gap:8px}
+.log-btn{background:var(--green);border:none;border-radius:50px;padding:16px 36px;font-size:17px;font-weight:800;color:#fff;cursor:pointer;box-shadow:0 4px 24px rgba(76,175,80,.5);display:flex;align-items:center;gap:10px;-webkit-tap-highlight-color:transparent;letter-spacing:.3px;white-space:nowrap}
+.log-btn:active{transform:scale(.96)}
+.log-btn:disabled{background:#2a3d24;color:rgba(255,255,255,.3);box-shadow:none;cursor:not-allowed}
+.log-btn-sub{font-size:11px;color:rgba(255,255,255,.7);background:rgba(20,26,17,.8);border-radius:8px;padding:4px 12px;text-align:center;white-space:nowrap}
+.recenter-btn{position:absolute;bottom:24px;right:14px;z-index:100;background:var(--surface);border:1px solid var(--border);border-radius:50%;width:44px;height:44px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.gps-bar{position:absolute;top:10px;right:10px;z-index:100;background:rgba(20,26,17,.93);border:1px solid var(--border);border-radius:10px;padding:6px 10px;font-size:11px;display:flex;align-items:center;gap:6px;color:var(--text2)}
+.gps-dot{width:7px;height:7px;border-radius:50%;background:#888;flex-shrink:0}
+.gps-dot.locked{background:var(--green-bright);animation:pulse 1.5s infinite}
+.gps-dot.searching{background:var(--orange);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.3)}}
+.sync-bar{position:absolute;bottom:90px;left:50%;transform:translateX(-50%);z-index:100;font-size:11px;color:rgba(255,255,255,.5);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:var(--green-bright)}
+#statsView{overflow-y:auto;padding:14px;gap:14px}
+.stat-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:14px}
+.stat-card .lbl{font-size:11px;color:var(--text2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.6px}
+.stat-card .val{font-size:24px;font-weight:700}
+.val.green{color:var(--green-bright)}.val.orange{color:var(--orange)}
+.section-title{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px;margin-top:2px}
+.lb-row{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:10px 12px;margin-bottom:7px}
+.lb-row.you{border-color:var(--green-border);background:var(--green-bg)}
+.rank{font-size:16px;font-weight:700;min-width:24px;color:var(--text2)}
+.rank.gold{color:#fbbf24}.rank.silver{color:#94a3b8}.rank.bronze{color:#cd7c54}
+.mini-bar{height:3px;background:rgba(255,255,255,.08);border-radius:2px;margin-top:5px}
+.mini-bar-fill{height:100%;border-radius:2px}
+.daily-goal{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:14px}
+.goal-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.goal-title{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+.goal-num{font-size:13px;font-weight:700;color:var(--green-bright)}
+.goal-bar{height:8px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden}
+.goal-fill{height:100%;border-radius:4px;background:var(--green);transition:width .5s}
+#managerView{overflow-y:auto;padding:14px;gap:14px}
+.date-row{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.date-row label{font-size:12px;color:var(--text2);white-space:nowrap}
+.date-picker{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:#fff;font-size:13px;cursor:pointer;flex:1}
+#mgrMapWrap{background:var(--surface);border:1px solid var(--border);border-radius:13px;overflow:hidden}
+#mgrMapTitle{padding:10px 14px;font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+#mgrMapEl{height:300px;width:100%;position:relative}
+#mgrGmap{position:absolute;inset:0;width:100%;height:100%}
+.rep-legend{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px;border-top:1px solid var(--border)}
+.rep-legend-item{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2)}
+.rep-legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;border:1.5px solid rgba(255,255,255,.3)}
+.drop-table{width:100%;border-collapse:collapse;font-size:12px}
+.drop-table th{color:var(--text2);font-weight:600;text-align:left;padding:7px 9px;border-bottom:1px solid var(--border);text-transform:uppercase;font-size:10px;letter-spacing:.5px}
+.drop-table td{padding:7px 9px;border-bottom:1px solid rgba(255,255,255,.03)}
+.drop-table tr:hover td{background:var(--surface2)}
+.badge{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10px;font-weight:700}
+.badge-orange{background:var(--orange-bg);color:var(--orange)}
+.badge-red{background:var(--red-bg);color:#ff6b6b}
+.filter-row{display:flex;gap:7px;flex-wrap:wrap}
+.filter-btn{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:4px 10px;font-size:11px;color:var(--text2);cursor:pointer}
+.filter-btn.active{background:var(--green-bg);border-color:var(--green-border);color:var(--green-bright)}
+.export-btn{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:7px 14px;font-size:12px;color:var(--text2);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.modal-bg{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:20px}
+.modal-bg.open{display:flex}
+.modal-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px;max-width:390px;width:100%;text-align:center;max-height:92vh;overflow-y:auto}
+.modal-icon{font-size:36px;margin-bottom:8px}
+.modal-card h2{font-size:17px;font-weight:700;margin-bottom:6px}
+.modal-card p{color:var(--text2);font-size:13px;margin-bottom:14px;line-height:1.55}
+.photo-preview{width:100%;border-radius:10px;margin-bottom:12px;max-height:200px;object-fit:cover;border:1px solid var(--border)}
+#photoInput{display:none}
+.sec-label{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;text-align:left;display:block}
+.hanger-opts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.h-opt{background:var(--surface2);border:2px solid var(--border);border-radius:11px;padding:12px 8px;cursor:pointer;text-align:center}
+.h-opt.sel{background:var(--green-bg);border-color:var(--green-border)}
+.h-opt .hp{font-size:18px;font-weight:800;display:block;margin-bottom:3px;color:#fff}
+.h-opt.sel .hp{color:var(--green-bright)}
+.h-opt .hl{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+.h-opt.sel .hl{color:var(--green-bright)}
+.ns-opt{background:var(--surface2);border:2px solid var(--border);border-radius:11px;padding:11px 14px;font-size:13px;font-weight:600;color:#e8ede4;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px}
+.ns-opt.sel{background:var(--red-bg);border-color:var(--red-border);color:#ff6b6b}
+.note-ta{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px;color:#fff;font-size:13px;resize:none;height:56px;margin-bottom:12px;font-family:inherit}
+.note-ta::placeholder{color:var(--text2)}
+.btn-primary{background:var(--green);color:#fff;border:none;border-radius:10px;padding:11px 22px;font-size:14px;font-weight:700;cursor:pointer;width:100%;margin-bottom:9px}
+.btn-sms{background:#1a73e8;color:#fff;border:none;border-radius:10px;padding:11px 22px;font-size:14px;font-weight:700;cursor:pointer;width:100%;margin-bottom:9px;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-skip{background:transparent;color:var(--text2);border:none;font-size:12px;cursor:pointer;padding:4px;text-decoration:underline}
+.toast{position:fixed;top:72px;left:50%;transform:translateX(-50%);background:var(--green-dim);color:#fff;padding:8px 18px;border-radius:9px;font-size:13px;font-weight:600;z-index:19999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;border:1px solid var(--green-border)}
+.toast.show{opacity:1}
+.toast.error{background:#c62828;border-color:#e53935}
+/* Firebase status banner */
+#fbStatus{position:fixed;bottom:0;left:0;right:0;background:#c62828;color:#fff;font-size:12px;font-weight:600;text-align:center;padding:8px;z-index:19998;display:none}
+
+/* MINI LEADERBOARD */
+#miniLB{position:absolute;left:10px;bottom:90px;z-index:100;width:180px;transition:all .3s}
+#miniLBHeader{background:rgba(20,26,17,.95);border:1px solid var(--green-border);border-radius:10px 10px 0 0;padding:7px 10px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#miniLBHeader span{font-size:11px;font-weight:700;color:var(--green-bright);text-transform:uppercase;letter-spacing:.6px}
+#miniLBToggle{font-size:10px;color:var(--text2);transition:transform .2s}
+#miniLBBody{background:rgba(20,26,17,.95);border:1px solid var(--green-border);border-top:none;border-radius:0 0 10px 10px;overflow:hidden;max-height:200px;transition:max-height .25s ease}
+#miniLBBody.collapsed{max-height:0}
+.mini-lb-row{display:flex;align-items:center;gap:7px;padding:5px 10px;border-bottom:1px solid rgba(255,255,255,.05)}
+.mini-lb-row:last-child{border-bottom:none}
+.mini-lb-rank{font-size:12px;min-width:18px;text-align:center}
+.mini-lb-name{font-size:12px;flex:1;color:#e8ede4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini-lb-name.you{color:var(--green-bright);font-weight:700}
+.mini-lb-count{font-size:13px;font-weight:800;min-width:24px;text-align:right}
+</style>
+</head>
+<body>
+
+<div id="pinScreen">
+  <div class="brand">
+    <div class="brand-bug">🐜</div>
+    <div class="brand-name">Crosstown <span>Pest Control</span></div>
+    <div class="brand-sub">Field Operations</div>
+    <div class="brand-loc">📍 Post Falls, Idaho</div>
+  </div>
+  <div class="pin-box">
+    <h2>Select your name &amp; enter your PIN</h2>
+    <select class="rep-select" id="repSelect">
+      <option value="">— Choose your name —</option>
+      <option value="Joe">Joe (Manager)</option>
+      <option value="David R.">David R.</option>
+      <option value="Ben B.">Ben B.</option>
+      <option value="Sam G.">Sam G.</option>
+      <option value="Sebastian K.">Sebastian K.</option>
+      <option value="Ross W.">Ross W.</option>
+    </select>
+    <div class="pin-dots">
+      <div class="pin-dot" id="d0"></div>
+      <div class="pin-dot" id="d1"></div>
+      <div class="pin-dot" id="d2"></div>
+    </div>
+    <div class="pin-error" id="pinError"></div>
+    <div class="pin-pad">
+      <button class="pin-btn" onclick="pinPress('1')">1</button><button class="pin-btn" onclick="pinPress('2')">2</button><button class="pin-btn" onclick="pinPress('3')">3</button>
+      <button class="pin-btn" onclick="pinPress('4')">4</button><button class="pin-btn" onclick="pinPress('5')">5</button><button class="pin-btn" onclick="pinPress('6')">6</button>
+      <button class="pin-btn" onclick="pinPress('7')">7</button><button class="pin-btn" onclick="pinPress('8')">8</button><button class="pin-btn" onclick="pinPress('9')">9</button>
+      <button class="pin-btn" onclick="pinPress('clear')" style="font-size:12px;color:var(--text2)">CLR</button>
+      <button class="pin-btn" onclick="pinPress('0')">0</button>
+      <button class="pin-btn" onclick="pinPress('back')" style="font-size:19px">⌫</button>
+    </div>
+  </div>
+  <div style="font-size:11px;color:var(--text2);text-align:center">Crosstown Pest Control · Post Falls, ID</div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <div>
+      <div class="topbar-logo">Crosstown <span>Pest</span></div>
+      <div class="topbar-sub">Post Falls, ID · Field App</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px">
+      <div class="streak-badge" id="streakBadge" style="display:none">🔥 <span id="streakNum">0</span></div>
+      <div class="rep-badge" id="topRepName"></div>
+      <div class="counter-pill"><strong id="topCount">0</strong> today</div>
+      <button class="btn-sm" onclick="logout()">Out</button>
+    </div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" id="tabMap" onclick="switchTab('map')">🗺 Map</div>
+    <div class="tab" id="tabStats" onclick="switchTab('stats')">📊 Stats</div>
+    <div class="tab" id="tabManager" onclick="switchTab('manager')" style="display:none">👑 Manager</div>
+  </div>
+
+  <div id="mapView" class="view active">
+    <div id="map-container">
+      <div id="gmap"></div>
+      <div class="map-legend">
+        <div class="legend-row"><div class="legend-dot" style="background:#4caf50"></div>Drop logged</div>
+        <div class="legend-row"><div class="legend-dot" style="background:#ff8f00"></div>Photo sent</div>
+        <div class="legend-row"><span style="font-size:13px;line-height:1">🚫</span> No soliciting</div>
+        <div class="legend-row"><div class="legend-dot" style="background:#42a5f5;border-color:#42a5f5"></div>You are here</div>
+        <div class="legend-row" style="margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,.07);font-size:10px;color:var(--text2)">Tap pin to delete</div>
+      </div>
+      <div class="gps-bar"><div class="gps-dot searching" id="gpsDot"></div><span id="gpsLabel">Getting GPS...</span></div>
+      <div class="sync-bar" id="syncBar" style="display:none"><div class="sync-dot"></div> Live · Firebase synced</div>
+      <div class="log-btn-wrap">
+        <button class="log-btn" id="logBtn" onclick="logCurrentLocation()" disabled>📍 Log Door Hanger Here</button>
+        <div class="log-btn-sub" id="logBtnSub">Waiting for GPS lock...</div>
+      </div>
+      <button class="recenter-btn" onclick="recenterMap()">🎯</button>
+
+      <!-- MINI LEADERBOARD -->
+      <div id="miniLB">
+        <div id="miniLBHeader" onclick="toggleMiniLB()">
+          <span>🏆 Leaderboard</span>
+          <span id="miniLBToggle">▲</span>
+        </div>
+        <div id="miniLBBody" id="miniLBBody">
+          <div id="miniLBList"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="statsView" class="view">
+    <div class="stat-cards">
+      <div class="stat-card"><div class="lbl">My drops today</div><div class="val green" id="myDropsToday">0</div></div>
+      <div class="stat-card"><div class="lbl">Photos sent</div><div class="val orange" id="myPhotos">0</div></div>
+      <div class="stat-card"><div class="lbl">All-time drops</div><div class="val" id="myAllTime">—</div></div>
+      <div class="stat-card"><div class="lbl">Photo rate</div><div class="val" id="myVerified">—</div></div>
+    </div>
+    <div class="daily-goal">
+      <div class="goal-hdr"><div class="goal-title">Daily goal — 50 hangers</div><div class="goal-num" id="goalNum">0 / 50</div></div>
+      <div class="goal-bar"><div class="goal-fill" id="goalFill" style="width:0%"></div></div>
+    </div>
+    <div class="section-title">🏆 Today's Leaderboard</div>
+    <div id="leaderboard"></div>
+  </div>
+
+  <div id="managerView" class="view">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:14px;font-weight:700">👑 Manager Dashboard</div>
+      <div style="font-size:11px;color:var(--text2)" id="mgDate"></div>
+    </div>
+    <div class="date-row">
+      <label>View date:</label>
+      <input type="date" class="date-picker" id="mgDatePicker" onchange="loadManagerDate()"/>
+      <button class="filter-btn active" onclick="loadManagerToday()">Today</button>
+    </div>
+    <div class="stat-cards">
+      <div class="stat-card"><div class="lbl">Total drops</div><div class="val green" id="mgTotal">0</div></div>
+      <div class="stat-card"><div class="lbl">Photos sent</div><div class="val orange" id="mgPhotos">0</div></div>
+      <div class="stat-card"><div class="lbl">Active reps</div><div class="val" id="mgReps">0</div></div>
+      <div class="stat-card"><div class="lbl">No-solic flags</div><div class="val" style="color:#ff6b6b" id="mgNS">0</div></div>
+    </div>
+    <div id="mgrMapWrap">
+      <div id="mgrMapTitle"><span>📍 Drops — color by rep</span><span id="mgrMapCount" style="color:var(--green-bright);font-size:12px"></span></div>
+      <div id="mgrMapEl"><div id="mgrGmap"></div></div>
+      <div class="rep-legend" id="repLegend"></div>
+    </div>
+    <div class="filter-row" id="filterRow"></div>
+    <button class="export-btn" onclick="exportCSV()">⬇ Export CSV</button>
+    <div style="overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:12px">
+      <table class="drop-table">
+        <thead><tr><th>Time (PT)</th><th>Rep</th><th>Hanger</th><th>GPS</th><th>Note</th><th>📸</th></tr></thead>
+        <tbody id="dropBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- HANGER MODAL -->
+<div class="modal-bg" id="noteModal">
+  <div class="modal-card">
+    <div class="modal-icon">🚪</div>
+    <h2>Log this drop</h2>
+    <span class="sec-label">Which door hanger did you leave?</span>
+    <div class="hanger-opts">
+      <div class="h-opt" onclick="selHanger(this,'$9 Initial')"><span class="hp">$9</span><span class="hl">Initial service</span></div>
+      <div class="h-opt" onclick="selHanger(this,'$50 Off')"><span class="hp">$50</span><span class="hl">Off coupon</span></div>
+      <div class="h-opt" onclick="selHanger(this,'$100 Off')"><span class="hp">$100</span><span class="hl">Off coupon</span></div>
+      <div class="h-opt" onclick="selHanger(this,'No hanger')"><span class="hp" style="font-size:20px">—</span><span class="hl">No hanger</span></div>
+    </div>
+    <span class="sec-label">Flag this address?</span>
+    <div class="ns-opt" id="nsBtnEl" onclick="toggleNS()">🚫 <span>No soliciting — skip next time</span></div>
+    <span class="sec-label">Extra note (optional)</span>
+    <textarea class="note-ta" id="noteText" placeholder="e.g. spoke to homeowner, call back..."></textarea>
+    <button class="btn-primary" onclick="confirmNote()">Log Drop</button>
+    <button class="btn-skip" onclick="cancelNote()">Cancel</button>
+  </div>
+</div>
+
+<!-- PHOTO MODAL -->
+<div class="modal-bg" id="photoModal">
+  <div class="modal-card">
+    <div class="modal-icon">📸</div>
+    <h2>Random photo check!</h2>
+    <p>Snap a quick photo of the door hanger you just placed, then send it in for verification.</p>
+    <img id="photoPreview" class="photo-preview" style="display:none" alt="preview"/>
+    <input type="file" id="photoInput" accept="image/*" capture="environment" onchange="handlePhoto(event)"/>
+    <button class="btn-primary" id="takePhotoBtn" onclick="document.getElementById('photoInput').click()">📷 Take Photo</button>
+    <button class="btn-sms" id="sendSmsBtn" style="display:none" onclick="sendViaSMS()">💬 Send via Text Message</button>
+    <button class="btn-skip" onclick="skipPhoto()">Skip</button>
+  </div>
+</div>
+
+<div id="fbStatus">⚠ Not connected to database — open this app from your Netlify link, not as a local file.</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+// ── FIREBASE SETUP ───────────────────────────────────────────
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, addDoc, deleteDoc, doc, onSnapshot, query, where, orderBy, Timestamp, enableIndexedDbPersistence } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const app = initializeApp({
+  apiKey:"AIzaSyD0mXk7HCHXijiKzdP-SIaX3g0a9x1Ixl4",
+  authDomain:"crosstown-pest-control.firebaseapp.com",
+  projectId:"crosstown-pest-control",
+  storageBucket:"crosstown-pest-control.firebasestorage.app",
+  messagingSenderId:"463867490085",
+  appId:"1:463867490085:web:41cd005e083957c1ed74cc"
+});
+
+const db = getFirestore(app);
+
+// Enable offline persistence so drops save even with spotty signal
+try { await enableIndexedDbPersistence(db); } catch(e) { /* already enabled or not supported */ }
+
+// Test connection by writing a tiny ping
+try {
+  await addDoc(collection(db,'_ping'),{t:Timestamp.now()});
+  document.getElementById('fbStatus').style.display='none';
+  window._fbOk=true;
+} catch(e) {
+  document.getElementById('fbStatus').style.display='block';
+  window._fbOk=false;
+  console.error('Firebase connection error:',e);
+}
+
+// Expose to global scope
+window._db=db;
+window._Timestamp=Timestamp;
+window._addDoc=(col,data)=>addDoc(collection(db,col),data);
+window._deleteDoc=(id)=>deleteDoc(doc(db,'drops',id));
+window._queryDrops=(dateStr,cb)=>{
+  // Query only by datePT — no orderBy to avoid needing a composite index
+  const q=query(collection(db,'drops'),where('datePT','==',dateStr));
+  return onSnapshot(q,snap=>{
+    // Sort client-side by ts after receiving
+    const docs=snap.docs.map(d=>({...d.data(),_id:d.id}));
+    docs.sort((a,b)=>{
+      const ta=a.ts&&a.ts.toMillis?a.ts.toMillis():0;
+      const tb=b.ts&&b.ts.toMillis?b.ts.toMillis():0;
+      return ta-tb;
+    });
+    cb(docs);
+  },err=>console.error('Snapshot error:',err));
+};
+window._fetchDropsByDate=async(dateStr)=>{
+  const {getDocs}=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+  const q=query(collection(db,'drops'),where('datePT','==',dateStr));
+  const snap=await getDocs(q);
+  const docs=snap.docs.map(d=>({...d.data(),_id:d.id}));
+  docs.sort((a,b)=>{
+    const ta=a.ts&&a.ts.toMillis?a.ts.toMillis():0;
+    const tb=b.ts&&b.ts.toMillis?b.ts.toMillis():0;
+    return ta-tb;
+  });
+  return docs;
+};
+
+window._firebaseReady=true;
+window.dispatchEvent(new Event('firebaseReady'));
+</script>
+
+<script>
+// ── CONFIG ───────────────────────────────────────────────────
+const TZ='America/Los_Angeles';
+const PROOF_NUMBER='2086184977';
+const DAILY_GOAL=50;
+const POST_FALLS={lat:47.7182,lng:-116.9516};
+
+const EMPLOYEES={
+  'Joe':          {pin:'847',isManager:true},
+  'David R.':     {pin:'392',isManager:false},
+  'Ben B.':       {pin:'615',isManager:false},
+  'Sam G.':       {pin:'274',isManager:false},
+  'Sebastian K.': {pin:'531',isManager:false},
+  'Ross W.':      {pin:'968',isManager:false},
+};
+const REP_COLORS={
+  'Joe':'#ffd700','David R.':'#4fc3f7','Ben B.':'#f06292',
+  'Sam G.':'#ffb74d','Sebastian K.':'#ce93d8','Ross W.':'#80cbc4',
+};
+
+// ── STATE ────────────────────────────────────────────────────
+let currentRep=null,isManager=false,pinEntry='';
+let gmap=null,mgrGmap=null;
+let myLat=null,myLng=null,userMarker=null,gpsAccuracy=null;
+let liveDrops=[],managerDrops=[],mgSelectedDate=null,mgFilterRep='all';
+let pendingDrop=null,selHangerVal='',noSolicSel=false;
+let dropMarkers={},watchId=null,unsubscribeSnap=null;
+let mapsReady=false,firebaseReady=false,waitingToInitMap=false;
+
+// ── FIREBASE READY GATE ──────────────────────────────────────
+window.addEventListener('firebaseReady',()=>{
+  firebaseReady=true;
+  console.log('Firebase ready, fbOk=',window._fbOk);
+});
+
+function onGoogleMapsReady(){mapsReady=true;if(waitingToInitMap){waitingToInitMap=false;buildFieldMap();}}
+
+// ── UTILS ────────────────────────────────────────────────────
+function repColor(r){return REP_COLORS[r]||'#aaa';}
+function todayPT(){return new Date().toLocaleDateString('en-CA',{timeZone:TZ});}
+function formatTimePT(ts){
+  try{const d=ts&&ts.toDate?ts.toDate():new Date(ts);return d.toLocaleTimeString('en-US',{timeZone:TZ,hour:'2-digit',minute:'2-digit'});}
+  catch(e){return '';}
+}
+function toast(msg,isError){
+  const t=document.getElementById('toast');t.textContent=msg;
+  t.className='toast'+(isError?' error':'')+' show';
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+// ── PIN ──────────────────────────────────────────────────────
+function pinPress(k){
+  if(k==='clear'){pinEntry='';updDots();return;}
+  if(k==='back'){pinEntry=pinEntry.slice(0,-1);updDots();return;}
+  if(pinEntry.length>=3)return;
+  pinEntry+=k;updDots();
+  if(pinEntry.length===3)setTimeout(checkPin,120);
+}
+function updDots(){for(let i=0;i<3;i++)document.getElementById('d'+i).classList.toggle('filled',i<pinEntry.length);}
+
+function checkPin(){
+  const rep=document.getElementById('repSelect').value;
+  if(!rep){document.getElementById('pinError').textContent='Please choose your name first.';pinEntry='';updDots();return;}
+  const emp=EMPLOYEES[rep];
+  if(emp&&emp.pin===pinEntry){
+    currentRep=rep;isManager=emp.isManager;
+    document.getElementById('pinScreen').style.display='none';
+    document.getElementById('app').style.display='flex';
+    document.getElementById('topRepName').textContent=rep+(isManager?' 👑':'');
+    document.getElementById('tabManager').style.display=isManager?'block':'none';
+    startGPS();
+    waitForFirebaseThenSubscribe();
+    setTimeout(initFieldMap,150);
+    if(isManager)switchTab('manager');
+  } else {
+    document.getElementById('pinError').textContent='Wrong PIN — try again.';
+    pinEntry='';updDots();
+    setTimeout(()=>document.getElementById('pinError').textContent='',2500);
+  }
+}
+
+function logout(){
+  currentRep=null;isManager=false;pinEntry='';
+  if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null;}
+  if(unsubscribeSnap){unsubscribeSnap();unsubscribeSnap=null;}
+  myLat=null;myLng=null;liveDrops=[];
+  document.getElementById('pinScreen').style.display='flex';
+  document.getElementById('app').style.display='none';
+  document.getElementById('tabManager').style.display='none';
+  if(gmap){gmap=null;document.getElementById('gmap').innerHTML='';}
+  if(mgrGmap){mgrGmap=null;document.getElementById('mgrGmap').innerHTML='';}
+  dropMarkers={};updDots();
+}
+
+// ── FIREBASE SUBSCRIBE ───────────────────────────────────────
+function waitForFirebaseThenSubscribe(){
+  if(!firebaseReady){setTimeout(waitForFirebaseThenSubscribe,200);return;}
+  subscribeToTodayDrops();
+}
+
+function subscribeToTodayDrops(){
+  if(unsubscribeSnap){unsubscribeSnap();unsubscribeSnap=null;}
+  const today=todayPT();
+  unsubscribeSnap=window._queryDrops(today,drops=>{
+    liveDrops=drops;
+    refreshFieldMarkers();
+    updateTopCount();updateStreak();renderMiniLB();
+    document.getElementById('syncBar').style.display='flex';
+    if(document.getElementById('statsView').classList.contains('active'))renderStats();
+    if(isManager&&document.getElementById('managerView').classList.contains('active')&&mgSelectedDate===today)renderManagerDash(liveDrops);
+  });
+}
+
+// ── GPS ──────────────────────────────────────────────────────
+function startGPS(){
+  if(!navigator.geolocation){setGpsStatus('error');return;}
+  setGpsStatus('searching');
+  navigator.geolocation.getCurrentPosition(onGpsOk,onGpsErr,{enableHighAccuracy:true,timeout:15000,maximumAge:0});
+  watchId=navigator.geolocation.watchPosition(onGpsOk,onGpsErr,{enableHighAccuracy:true,maximumAge:5000});
+}
+function onGpsOk(pos){
+  myLat=pos.coords.latitude;myLng=pos.coords.longitude;gpsAccuracy=Math.round(pos.coords.accuracy);
+  setGpsStatus('locked');
+  if(gmap){
+    gmap.panTo({lat:myLat,lng:myLng});
+    if(userMarker)userMarker.setPosition({lat:myLat,lng:myLng});
+    else userMarker=new google.maps.Marker({position:{lat:myLat,lng:myLng},map:gmap,icon:{path:google.maps.SymbolPath.CIRCLE,scale:10,fillColor:'#42a5f5',fillOpacity:1,strokeColor:'#fff',strokeWeight:2.5},title:'You',zIndex:999});
+  }
+}
+function onGpsErr(e){console.warn('GPS error',e);setGpsStatus('error');}
+function setGpsStatus(s){
+  const dot=document.getElementById('gpsDot'),lbl=document.getElementById('gpsLabel'),btn=document.getElementById('logBtn'),sub=document.getElementById('logBtnSub');
+  dot.className='gps-dot';
+  if(s==='locked'){dot.classList.add('locked');lbl.textContent='GPS locked'+(gpsAccuracy?' (±'+gpsAccuracy+'m)':'');btn.disabled=false;sub.textContent='Tap to log at your exact location';}
+  else if(s==='searching'){dot.classList.add('searching');lbl.textContent='Getting GPS...';btn.disabled=true;sub.textContent='Waiting for GPS lock...';}
+  else{lbl.textContent='GPS unavailable';lbl.style.color='#ff6b6b';btn.disabled=true;sub.textContent='Enable location in browser settings';}
+}
+
+// ── FIELD MAP ────────────────────────────────────────────────
+function initFieldMap(){if(gmap)return;if(!mapsReady){waitingToInitMap=true;return;}buildFieldMap();}
+function buildFieldMap(){
+  if(gmap)return;
+  gmap=new google.maps.Map(document.getElementById('gmap'),{
+    center:{lat:myLat||POST_FALLS.lat,lng:myLng||POST_FALLS.lng},zoom:17,
+    mapTypeId:'roadmap',scrollwheel:true,gestureHandling:'greedy',
+    zoomControl:true,streetViewControl:false,mapTypeControl:true,fullscreenControl:false,clickableIcons:false,
+    styles:[{featureType:'poi',stylers:[{visibility:'off'}]},{featureType:'transit',stylers:[{visibility:'off'}]}]
+  });
+  liveDrops.forEach(d=>placeFieldMarker(d));
+  if(myLat)userMarker=new google.maps.Marker({position:{lat:myLat,lng:myLng},map:gmap,icon:{path:google.maps.SymbolPath.CIRCLE,scale:10,fillColor:'#42a5f5',fillOpacity:1,strokeColor:'#fff',strokeWeight:2.5},title:'You',zIndex:999});
+}
+function recenterMap(){if(!gmap)return;if(myLat){gmap.panTo({lat:myLat,lng:myLng});gmap.setZoom(17);}else gmap.panTo({lat:POST_FALLS.lat,lng:POST_FALLS.lng});}
+function refreshFieldMarkers(){
+  if(!gmap)return;
+  const ids=new Set(liveDrops.map(d=>d._id));
+  Object.keys(dropMarkers).forEach(id=>{if(!ids.has(id)){dropMarkers[id].marker.setMap(null);delete dropMarkers[id];}});
+  liveDrops.forEach(d=>{if(!dropMarkers[d._id])placeFieldMarker(d);});
+}
+
+// ── MARKERS ──────────────────────────────────────────────────
+function fieldIcon(d){
+  if(d.noSolic)return noSolicSVG(30);
+  return {path:google.maps.SymbolPath.CIRCLE,scale:10,fillColor:d.photo?'#ff8f00':'#4caf50',fillOpacity:.95,strokeColor:'#fff',strokeWeight:2};
+}
+function mgrIcon(d){
+  if(d.noSolic)return noSolicSVG(26);
+  return {path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:repColor(d.rep),fillOpacity:.95,strokeColor:'#fff',strokeWeight:2};
+}
+function noSolicSVG(size){
+  return {url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'"><circle cx="'+size/2+'" cy="'+size/2+'" r="'+(size/2-1)+'" fill="#c62828" stroke="white" stroke-width="2"/><line x1="'+(size*.27)+'" y1="'+(size*.27)+'" x2="'+(size*.73)+'" y2="'+(size*.73)+'" stroke="white" stroke-width="2.5" stroke-linecap="round"/><line x1="'+(size*.73)+'" y1="'+(size*.27)+'" x2="'+(size*.27)+'" y2="'+(size*.73)+'" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>'),
+    scaledSize:new google.maps.Size(size,size),anchor:new google.maps.Point(size/2,size/2)};
+}
+
+function popupHTML(d,canDel){
+  const t=formatTimePT(d.ts);
+  return '<div style="font-family:sans-serif;min-width:155px;padding:4px 2px">'+
+    '<div style="font-weight:700;font-size:13px;margin-bottom:2px">'+d.rep+'</div>'+
+    '<div style="font-size:11px;color:#888;margin-bottom:4px">'+t+(d.accuracy?' (±'+d.accuracy+'m)':'')+'</div>'+
+    (d.hanger?'<div style="color:#4caf50;font-weight:700;font-size:13px;margin-bottom:3px">'+d.hanger+'</div>':'')+
+    (d.noSolic?'<div style="color:#e53935;font-size:12px;margin-bottom:3px">🚫 No soliciting</div>':'')+
+    (d.note?'<div style="color:#666;font-size:11px;margin-bottom:3px">'+d.note+'</div>':'')+
+    (d.photo?'<div style="color:#ff8f00;font-size:11px;margin-bottom:4px">📸 Photo sent</div>':'')+
+    (canDel?'<button onclick="deleteDrop(\''+d._id+'\')" style="margin-top:6px;background:#e53935;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;width:100%">🗑 Delete</button>':'<div style="font-size:10px;color:#999;margin-top:4px">By '+d.rep+'</div>')+
+    '</div>';
+}
+function placeFieldMarker(d){
+  if(!gmap||dropMarkers[d._id])return;
+  const canDel=d.rep===currentRep||isManager;
+  const m=new google.maps.Marker({position:{lat:d.lat,lng:d.lng},map:gmap,icon:fieldIcon(d),title:d.rep,zIndex:10});
+  const iw=new google.maps.InfoWindow({content:popupHTML(d,canDel)});
+  m.addListener('click',()=>iw.open(gmap,m));
+  dropMarkers[d._id]={marker:m,iw};
+}
+function placeMgrMarker(d,tm){
+  if(!tm)return;
+  const m=new google.maps.Marker({position:{lat:d.lat,lng:d.lng},map:tm,icon:mgrIcon(d),title:d.rep});
+  const iw=new google.maps.InfoWindow({content:popupHTML(d,false)});
+  m.addListener('click',()=>iw.open(tm,m));
+}
+
+async function deleteDrop(id){
+  try{await window._deleteDoc(id);toast('Drop deleted.');}
+  catch(e){toast('Could not delete: '+e.message,true);}
+}
+
+// ── LOG BUTTON ───────────────────────────────────────────────
+function logCurrentLocation(){
+  if(!myLat||!myLng){toast('No GPS fix yet — please wait.');return;}
+  if(!firebaseReady||!window._fbOk){toast('Not connected to database. Use the Netlify link.',true);return;}
+  pendingDrop={
+    rep:currentRep,lat:myLat,lng:myLng,
+    ts:window._Timestamp.now(),
+    datePT:todayPT(),
+    photo:false,hanger:'',noSolic:false,note:'',
+    accuracy:gpsAccuracy||null
+  };
+  selHangerVal='';noSolicSel=false;
+  document.querySelectorAll('.h-opt').forEach(e=>e.classList.remove('sel'));
+  document.getElementById('nsBtnEl').classList.remove('sel');
+  document.getElementById('noteText').value='';
+  document.getElementById('noteModal').classList.add('open');
+}
+
+// ── NOTE MODAL ───────────────────────────────────────────────
+function selHanger(el,val){
+  document.querySelectorAll('.h-opt').forEach(e=>e.classList.remove('sel'));
+  selHangerVal=(selHangerVal===val)?'':(el.classList.add('sel'),val);
+}
+function toggleNS(){noSolicSel=!noSolicSel;document.getElementById('nsBtnEl').classList.toggle('sel',noSolicSel);}
+function confirmNote(){
+  if(!pendingDrop)return;
+  pendingDrop.hanger=selHangerVal;pendingDrop.noSolic=noSolicSel;pendingDrop.note=document.getElementById('noteText').value.trim();
+  document.getElementById('noteModal').classList.remove('open');
+  checkPhotoPrompt();
+}
+function cancelNote(){pendingDrop=null;document.getElementById('noteModal').classList.remove('open');}
+
+// ── PHOTO PROMPT (every ~10, jittered 8-12) ──────────────────
+function checkPhotoPrompt(){
+  const myCount=liveDrops.filter(d=>d.rep===currentRep).length+1;
+  const interval=8+Math.floor(Math.random()*5);
+  if(myCount%interval===0){
+    document.getElementById('photoPreview').style.display='none';
+    document.getElementById('takePhotoBtn').style.display='block';
+    document.getElementById('sendSmsBtn').style.display='none';
+    document.getElementById('photoModal').classList.add('open');
+  } else {
+    saveDrop(false);
+  }
+}
+
+function handlePhoto(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    document.getElementById('photoPreview').src=ev.target.result;
+    document.getElementById('photoPreview').style.display='block';
+    document.getElementById('takePhotoBtn').style.display='none';
+    document.getElementById('sendSmsBtn').style.display='flex';
+  };
+  reader.readAsDataURL(file);
+}
+function sendViaSMS(){
+  const msg=encodeURIComponent('Crosstown Pest door hanger photo — '+currentRep+' at '+formatTimePT(window._Timestamp.now())+' PT.');
+  window.location.href='sms:+1'+PROOF_NUMBER+'&body='+msg;
+  setTimeout(()=>{document.getElementById('photoModal').classList.remove('open');saveDrop(true);},1500);
+}
+function skipPhoto(){document.getElementById('photoModal').classList.remove('open');saveDrop(false);}
+
+async function saveDrop(photoSent){
+  if(!pendingDrop)return;
+  pendingDrop.photo=photoSent;
+  try{
+    await window._addDoc('drops',pendingDrop);
+    toast('✓ Saved'+(pendingDrop.hanger?' · '+pendingDrop.hanger:'')+(pendingDrop.noSolic?' · 🚫':'')+( photoSent?' · 📸':''));
+    if(gmap&&myLat)gmap.panTo({lat:myLat,lng:myLng});
+  }catch(e){
+    toast('⚠ Save failed: '+e.message,true);
+    console.error('Save error:',e);
+  }
+  pendingDrop=null;
+}
+
+// ── COUNTS ───────────────────────────────────────────────────
+function updateTopCount(){document.getElementById('topCount').textContent=liveDrops.filter(d=>d.rep===currentRep).length;}
+function updateStreak(){
+  const c=liveDrops.filter(d=>d.rep===currentRep).length;
+  const sb=document.getElementById('streakBadge');
+  if(c>=5){sb.style.display='flex';document.getElementById('streakNum').textContent=c;}else sb.style.display='none';
+}
+
+// ── TABS ─────────────────────────────────────────────────────
+function switchTab(tab){
+  ['map','stats','manager'].forEach(t=>{
+    const el=document.getElementById('tab'+t.charAt(0).toUpperCase()+t.slice(1));
+    if(el)el.classList.toggle('active',t===tab);
+    const v=document.getElementById(t+'View');if(v)v.classList.toggle('active',t===tab);
+  });
+  if(tab==='map'&&gmap)setTimeout(()=>{google.maps.event.trigger(gmap,'resize');if(myLat)gmap.panTo({lat:myLat,lng:myLng});},80);
+  if(tab==='stats')renderStats();
+  if(tab==='manager'){mgSelectedDate=todayPT();document.getElementById('mgDatePicker').value=mgSelectedDate;renderManagerDash(liveDrops);}
+}
+
+// ── STATS ────────────────────────────────────────────────────
+function renderStats(){
+  const today=liveDrops.filter(d=>d.rep===currentRep);
+  document.getElementById('myDropsToday').textContent=today.length;
+  document.getElementById('myPhotos').textContent=today.filter(d=>d.photo).length;
+  document.getElementById('myAllTime').textContent='—';
+  document.getElementById('myVerified').textContent=today.length>0?Math.round(today.filter(d=>d.photo).length/today.length*100)+'%':'—';
+  const pct=Math.min(Math.round(today.length/DAILY_GOAL*100),100);
+  document.getElementById('goalNum').textContent=today.length+' / '+DAILY_GOAL;
+  document.getElementById('goalFill').style.width=pct+'%';
+  const rt={};liveDrops.forEach(d=>{rt[d.rep]=(rt[d.rep]||0)+1;});
+  const sorted=Object.entries(rt).sort((a,b)=>b[1]-a[1]);
+  const max=sorted[0]?.[1]||1;
+  const medals=['🥇','🥈','🥉'],rankC=['gold','silver','bronze'];
+  let html='';
+  sorted.forEach(([rep,cnt],i)=>{
+    const isYou=rep===currentRep,col=repColor(rep);
+    html+='<div class="lb-row'+(isYou?' you':'')+'">'+
+      '<div class="rank '+(rankC[i]||'')+'">'+(medals[i]||i+1)+'</div>'+
+      '<div style="flex:1"><div style="display:flex;align-items:center;gap:6px;font-weight:500;font-size:14px">'+
+      '<span style="width:9px;height:9px;border-radius:50%;background:'+col+';display:inline-block;flex-shrink:0"></span>'+
+      rep+(isYou?' <span style="font-size:10px;color:var(--green-bright)">(you)</span>':'')+
+      '</div><div class="mini-bar"><div class="mini-bar-fill" style="width:'+Math.round(cnt/max*100)+'%;background:'+col+'"></div></div></div>'+
+      '<div style="text-align:right"><div style="font-size:13px;font-weight:700;color:'+col+'">'+cnt+'</div>'+
+      '<div style="font-size:11px;color:var(--text2)">'+liveDrops.filter(d=>d.rep===rep&&d.photo).length+' 📸</div></div></div>';
+  });
+  document.getElementById('leaderboard').innerHTML=html||'<p style="color:var(--text2);font-size:13px;text-align:center;padding:18px">No drops yet — let\'s go! 🐜</p>';
+}
+
+// ── MANAGER ──────────────────────────────────────────────────
+function loadManagerToday(){mgSelectedDate=todayPT();document.getElementById('mgDatePicker').value=mgSelectedDate;renderManagerDash(liveDrops);}
+async function loadManagerDate(){
+  const picked=document.getElementById('mgDatePicker').value;if(!picked)return;
+  mgSelectedDate=picked;
+  if(picked===todayPT()){renderManagerDash(liveDrops);return;}
+  try{const drops=await window._fetchDropsByDate(picked);renderManagerDash(drops);}
+  catch(e){toast('Error loading data.',true);}
+}
+
+function renderManagerDash(drops){
+  managerDrops=drops||[];
+  const reps=[...new Set(managerDrops.map(d=>d.rep))];
+  document.getElementById('mgDate').textContent=new Date(mgSelectedDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric',timeZone:TZ});
+  document.getElementById('mgTotal').textContent=managerDrops.length;
+  document.getElementById('mgPhotos').textContent=managerDrops.filter(d=>d.photo).length;
+  document.getElementById('mgReps').textContent=reps.length;
+  document.getElementById('mgNS').textContent=managerDrops.filter(d=>d.noSolic).length;
+  document.getElementById('mgrMapCount').textContent=managerDrops.length+' pins';
+  let legHTML='';
+  reps.forEach(r=>{
+    const col=repColor(r),cnt=managerDrops.filter(d=>d.rep===r).length,ns=managerDrops.filter(d=>d.rep===r&&d.noSolic).length;
+    legHTML+='<div class="rep-legend-item"><div class="rep-legend-dot" style="background:'+col+'"></div>'+r+' <span style="color:var(--green-bright);font-weight:700;margin-left:2px">'+cnt+'</span>'+(ns>0?' <span style="color:#ff6b6b;font-size:10px">'+ns+'🚫</span>':'')+'</div>';
+  });
+  document.getElementById('repLegend').innerHTML=legHTML||'<span style="color:var(--text2);font-size:12px">No drops for this date.</span>';
+  buildMgrMap(managerDrops);
+  let fHTML='<button class="filter-btn'+(mgFilterRep==='all'?' active':'')+'" onclick="setFilter(\'all\')">All reps</button>';
+  reps.forEach(r=>{fHTML+='<button class="filter-btn'+(mgFilterRep===r?' active':'')+'" onclick="setFilter(\''+r+'\')">'+r+'</button>';});
+  document.getElementById('filterRow').innerHTML=fHTML;
+  const filtered=(mgFilterRep==='all'?managerDrops:managerDrops.filter(d=>d.rep===mgFilterRep)).slice().reverse();
+  const rows=filtered.map(d=>{
+    const t=formatTimePT(d.ts),col=repColor(d.rep);
+    const nsCell=d.noSolic?'<span class="badge badge-red">🚫</span>':d.note?'<span style="font-size:10px;color:var(--text2)">'+d.note+'</span>':'—';
+    return '<tr><td>'+t+'</td>'+
+      '<td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:50%;background:'+col+';display:inline-block"></span>'+d.rep+'</span></td>'+
+      '<td style="color:var(--green-bright);font-weight:700;font-size:11px">'+(d.hanger||'—')+'</td>'+
+      '<td style="font-size:10px;color:var(--text2)">'+d.lat.toFixed(4)+','+d.lng.toFixed(4)+'</td>'+
+      '<td>'+nsCell+'</td><td>'+(d.photo?'<span class="badge badge-orange">📸</span>':'—')+'</td></tr>';
+  }).join('');
+  document.getElementById('dropBody').innerHTML=rows||'<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:16px">No drops for this date.</td></tr>';
+}
+function buildMgrMap(drops){
+  if(!mapsReady)return;
+  if(mgrGmap){mgrGmap=null;document.getElementById('mgrGmap').innerHTML='';}
+  let center={lat:POST_FALLS.lat,lng:POST_FALLS.lng};
+  if(drops.length>0){const lats=drops.map(d=>d.lat),lngs=drops.map(d=>d.lng);center={lat:(Math.max(...lats)+Math.min(...lats))/2,lng:(Math.max(...lngs)+Math.min(...lngs))/2};}
+  mgrGmap=new google.maps.Map(document.getElementById('mgrGmap'),{center,zoom:13,mapTypeId:'roadmap',scrollwheel:true,gestureHandling:'cooperative',zoomControl:true,streetViewControl:false,mapTypeControl:false,fullscreenControl:false,styles:[{featureType:'poi',stylers:[{visibility:'off'}]}]});
+  drops.forEach(d=>placeMgrMarker(d,mgrGmap));
+  if(drops.length>0){const b=new google.maps.LatLngBounds();drops.forEach(d=>b.extend({lat:d.lat,lng:d.lng}));mgrGmap.fitBounds(b);}
+  setTimeout(()=>google.maps.event.trigger(mgrGmap,'resize'),200);
+}
+function setFilter(r){mgFilterRep=r;renderManagerDash(managerDrops);}
+function exportCSV(){
+  const rows=[['Date (PT)','Time (PT)','Rep','Hanger','Latitude','Longitude','GPS Accuracy (m)','No Soliciting','Note','Photo Sent'],
+    ...managerDrops.map(d=>[d.datePT||'',formatTimePT(d.ts),d.rep,d.hanger||'',d.lat.toFixed(5),d.lng.toFixed(5),d.accuracy||'',d.noSolic?'Yes':'No',d.note||'',d.photo?'Yes':'No'])];
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='crosstown_drops_'+mgSelectedDate+'.csv';a.click();toast('CSV exported!');
+}
+
+// ── MINI LEADERBOARD ─────────────────────────────────────────
+let miniLBOpen = true;
+
+function toggleMiniLB(){
+  miniLBOpen = !miniLBOpen;
+  document.getElementById('miniLBBody').classList.toggle('collapsed', !miniLBOpen);
+  document.getElementById('miniLBToggle').textContent = miniLBOpen ? '▲' : '▼';
+}
+
+function renderMiniLB(){
+  const rt={};
+  liveDrops.forEach(d=>{rt[d.rep]=(rt[d.rep]||0)+1;});
+  // Make sure current rep is shown even with 0 drops
+  if(currentRep && !rt[currentRep]) rt[currentRep]=0;
+  const sorted=Object.entries(rt).sort((a,b)=>b[1]-a[1]);
+  const medals=['🥇','🥈','🥉'];
+  let html='';
+  sorted.forEach(([rep,cnt],i)=>{
+    const isYou=rep===currentRep;
+    const col=repColor(rep);
+    const medal=medals[i]||'<span style="font-size:11px;color:var(--text2)">'+(i+1)+'</span>';
+    html+=`<div class="mini-lb-row">
+      <div class="mini-lb-rank">${medal}</div>
+      <div style="width:7px;height:7px;border-radius:50%;background:${col};flex-shrink:0"></div>
+      <div class="mini-lb-name${isYou?' you':''}">${rep.split(' ')[0]}</div>
+      <div class="mini-lb-count" style="color:${col}">${cnt}</div>
+    </div>`;
+  });
+  if(!html) html='<div style="padding:8px 10px;font-size:11px;color:var(--text2)">No drops yet today</div>';
+  document.getElementById('miniLBList').innerHTML=html;
+}
+
+</script>
