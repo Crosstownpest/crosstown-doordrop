@@ -16,6 +16,20 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   const PRODUCTS = [
     {
+      id: "bifen-it",
+      name: "Bifen I/T",
+      epa: "53883-118",
+      source: "Bifen I/T label, EPA 53883-118. Outside spray is 0.33 to 1 fl oz per gallon (0.02% to 0.06%). Perimeter use is 0.33 to 1.0 fl oz per 1,000 sq ft. This is the spray tank, not a termite trench.",
+      maxOzPer1000: 1,
+      doses: [
+        { oz: 0.33, percent: "0.02%", hint: "Low rate" },
+        { oz: 0.5, percent: "", hint: "Chart rate" },
+        { oz: 0.67, percent: "", hint: "Chart rate" },
+        { oz: 0.75, percent: "", hint: "Chart rate" },
+        { oz: 1, percent: "0.06%", hint: "High rate" },
+      ],
+    },
+    {
       id: "demand-cs",
       name: "Demand CS",
       epa: "100-1066",
@@ -167,26 +181,30 @@
   }
 
   function buildSlip(fields) {
+    const doseLine = fields.result.dilution + (fields.result.percent ? " (" + fields.result.percent + ")" : "");
     const lines = [
-      "Crosstown material slip",
+      "GorillaDesk Add Material",
       "Tech: " + fields.tech,
       "When: " + fields.when,
-      "Product: " + fields.product.name,
+      "Material: " + fields.product.name,
       "EPA: " + fields.product.epa,
-      "TYPE INTO GORILLADESK QUANTITY: " + formatOz(fields.result.totalOz) + " fl oz",
-      "Unit: fl oz",
-      "Dilution: " + fields.result.dilution + " (" + fields.result.percent + ")",
-      "Finished spray: " + formatOz(fields.gallons) + " gal",
+      "Total Concen: " + formatOz(fields.result.totalOz),
+      "Unit: floz",
+      "Ounces in each gallon: " + doseLine,
+      "Finished Dilution (Gallons): " + formatOz(fields.gallons),
     ];
+    if (fields.method) lines.push("Method: " + fields.method);
+    if (fields.site) lines.push("Locations: " + fields.site);
+    if (fields.pests && fields.pests.length) lines.push("Target Pest(s): " + fields.pests.join(", "));
     if (fields.sqft > 0) {
-      lines.push("Treated area: " + Math.round(fields.sqft) + " sq ft");
+      lines.push("Area/Quantity: " + Math.round(fields.sqft));
+      lines.push("Area unit: Square ft");
       lines.push("Rate: " + formatOz(fields.result.per1000) + " fl oz per 1,000 sq ft");
     }
     if (fields.linearFeet > 0) lines.push("Foundation: " + Math.round(fields.linearFeet) + " linear ft");
-    if (fields.site) lines.push("Where: " + fields.site);
-    if (fields.pests && fields.pests.length) lines.push("Pests: " + fields.pests.join(", "));
-    lines.push("Quantity is the product from the jug, not the gallons of water.");
-    lines.push("Still put wind, temperature, and start/stop time on the GorillaDesk job the same day.");
+    lines.push("Total Concen is the product from the jug. Finished Dilution is the gallons of spray.");
+    lines.push("If the amount box still says 1 fl oz, change it. 1 fl oz is only this stop when Total Concen says 1.00.");
+    lines.push("Still put wind, temperature, and start/stop time on the job the same day.");
     return lines.join("\n");
   }
 

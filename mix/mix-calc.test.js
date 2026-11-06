@@ -126,7 +126,25 @@ test("the same concentrate four stops in a row is a streak", () => {
   );
 });
 
-test("the slip tells the tech the quantity and not the gallons", () => {
+test("Bifen I/T at 1 fl oz per gallon on 1,000 sq ft is the label ceiling", () => {
+  const ok = calc.calculate({
+    product: byId["bifen-it"],
+    gallons: 1,
+    ozPerGallon: 1,
+    sqft: 1000,
+  });
+  assert.equal(ok.status, "ok");
+  assert.equal(calc.formatOz(ok.totalOz), "1.00");
+  const over = calc.calculate({
+    product: byId["bifen-it"],
+    gallons: 1.5,
+    ozPerGallon: 1,
+    sqft: 1000,
+  });
+  assert.equal(over.status, "over");
+});
+
+test("the slip uses the Add Material field names", () => {
   const result = calc.calculate({
     product: byId["demand-cs"],
     gallons: 1.5,
@@ -143,10 +161,16 @@ test("the slip tells the tech the quantity and not the gallons", () => {
     sqft: 1500,
     linearFeet: 0,
     site: "Exterior foundation",
+    method: "Perimeter spray",
     pests: ["ants"],
   });
-  assert.match(slip, /QUANTITY: 0\.60 fl oz/);
-  assert.match(slip, /not the gallons of water/);
-  assert.match(slip, /0\.40 fl oz per gallon/);
-  assert.match(slip, /1,000 sq ft/);
+  assert.match(slip, /Material: Demand CS/);
+  assert.match(slip, /Total Concen: 0\.60/);
+  assert.match(slip, /Unit: floz/);
+  assert.match(slip, /Finished Dilution \(Gallons\): 1\.50/);
+  assert.match(slip, /Locations: Exterior foundation/);
+  assert.match(slip, /Target Pest\(s\): ants/);
+  assert.match(slip, /Area\/Quantity: 1500/);
+  assert.match(slip, /Area unit: Square ft/);
+  assert.match(slip, /product from the jug/);
 });

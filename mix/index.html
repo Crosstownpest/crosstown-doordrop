@@ -68,6 +68,10 @@
     text-align: center; font-size: 16px;
   }
   #copy:disabled { background: #2a3126; color: #8b9484; }
+  .fields { margin: 8px 0 0; }
+  .fields div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .fields span { color: var(--muted); }
+  .fields b { font-weight: 700; text-align: right; }
   .check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; margin-top: 8px; }
   .today { font-size: 13px; color: var(--muted); }
   .today div { padding: 8px 0; border-bottom: 1px solid var(--line); }
@@ -80,7 +84,7 @@
 <body>
 <header>
   <h1>Mix check</h1>
-  <p>Tap what you put in the tank. The page does the multiplication and tells you the one number to type into GorillaDesk Quantity. Quantity is the product from the jug, not the gallons of water.</p>
+  <p>Same rows as Add Material. Total Concen is the product from the jug. Finished Dilution (Gallons) is how much spray you put out. The page does that multiplication.</p>
 </header>
 
 <h2>Who sprayed</h2>
@@ -93,33 +97,36 @@
 <h2>Ounces of product in each gallon</h2>
 <div class="row" id="doses"></div>
 
-<h2>Gallons you sprayed</h2>
+<h2>Finished Dilution (Gallons)</h2>
 <div class="stepper">
   <button type="button" id="gal-down" aria-label="Less gallons">−</button>
-  <div class="val"><strong id="gal-val">1.00</strong><em>gallons of finished spray</em></div>
+  <div class="val"><strong id="gal-val">1.00</strong><em>finished dilution, gallons</em></div>
   <button type="button" id="gal-up" aria-label="More gallons">+</button>
 </div>
 <div class="row presets" id="gal-presets"></div>
 
 <div id="area-block">
-  <h2 id="area-title">Square feet you actually wet</h2>
+  <h2 id="area-title">Area/Quantity</h2>
   <div class="stepper">
     <button type="button" id="area-down" aria-label="Less area">−</button>
-    <div class="val"><strong id="area-val">—</strong><em id="area-unit">sq ft</em></div>
+    <div class="val"><strong id="area-val">—</strong><em id="area-unit">Square ft</em></div>
     <button type="button" id="area-up" aria-label="More area">+</button>
   </div>
 </div>
 
-<h2>Where</h2>
+<h2>Method</h2>
+<div class="row" id="methods"></div>
+
+<h2>Locations</h2>
 <div class="row" id="sites"></div>
 
-<h2>Pest</h2>
+<h2>Target Pest(s)</h2>
 <div class="row" id="pests"></div>
 
 <section id="slip" aria-live="polite">
-  <div id="kicker">GorillaDesk Quantity</div>
+  <div id="kicker">Total Concen</div>
   <div id="answer">—</div>
-  <p id="detail"></p>
+  <div class="fields" id="fields"></div>
   <p id="reason"></p>
   <label class="check" id="streak-row" hidden>
     <input type="checkbox" id="streak-ok">
@@ -133,7 +140,7 @@
 
 <p><button type="button" class="linkish" id="office-toggle">Office: label rates</button></p>
 <section id="office">
-  <p class="src">These buttons are the rates read off the labels named below. If a jug in the truck says something else, change it here before the crew uses it. Add the dilution lines to GorillaDesk once, under Settings, Addons, Material Usage, Dilution, so a tech picks the line instead of typing it.</p>
+  <p class="src">These buttons are the rates read off the labels named below. If a jug in the truck says something else, change it here before the crew uses it. If Add Material only offers “1 fl oz” in Total Concen, add the amounts the crew actually gets, under Settings, Addons, Material Usage. 1 fl oz is only correct when this page says 1.00.</p>
   <div id="office-list"></div>
   <h2>Add a product from the jug</h2>
   <label class="field">Name<input id="new-name" type="text" maxlength="60"></label>
@@ -141,7 +148,7 @@
   <label class="field">Ounces per gallon on the label, separated by commas<input id="new-doses" type="text" placeholder="0.5, 1"></label>
   <label class="field">Max fl oz of product per 1,000 sq ft, if the label has one<input id="new-max" type="number" min="0" step="0.01"></label>
   <button type="button" id="add-product">Save this product on this phone</button>
-  <p><button type="button" class="linkish" id="reset-products">Put the original five products back</button></p>
+  <p><button type="button" class="linkish" id="reset-products">Put the original products back</button></p>
 </section>
 
 <script src="mix-calc.js"></script>
@@ -149,9 +156,10 @@
 (function () {
   const C = window.MixCalc;
   const TECHS = ["Joseph", "David", "Ben", "Sam", "Ross", "Sebastian", "Kimbre"];
+  const METHODS = ["Perimeter spray", "Crack and crevice", "Spot treatment", "Broadcast"];
   const SITES = ["Exterior foundation", "Interior crack and crevice", "Eaves and windows", "Lawn or ornamentals"];
   const PESTS = ["ants", "spiders", "roaches", "earwigs", "wasps", "bed bugs"];
-  const KEYS = { tech: "crosstown-mix-tech", products: "crosstown-mix-products-v1", history: "crosstown-mix-history-v1" };
+  const KEYS = { tech: "crosstown-mix-tech", products: "crosstown-mix-products-v2", history: "crosstown-mix-history-v1" };
 
   const state = {
     tech: localStorage.getItem(KEYS.tech) || "",
@@ -160,7 +168,8 @@
     gallons: 1,
     sqft: 0,
     linearFeet: 0,
-    site: "Exterior foundation",
+    site: "",
+    method: "",
     pests: [],
     streakConfirmed: false,
   };
@@ -276,9 +285,19 @@
   function renderArea() {
     const foundation = usesFoundation();
     el("area-title").textContent = foundation ? "Linear feet of foundation you sprayed" : "Square feet you actually wet";
-    el("area-unit").textContent = foundation ? "linear feet" : "sq ft";
+    el("area-unit").textContent = foundation ? "linear feet" : "Square ft";
     const value = foundation ? state.linearFeet : state.sqft;
     el("area-val").textContent = value > 0 ? String(Math.round(value)) : "—";
+  }
+
+  function renderMethods() {
+    const wrap = el("methods");
+    wrap.replaceChildren();
+    METHODS.forEach((method) => {
+      const button = chip(method, state.method === method, "choice");
+      button.addEventListener("click", () => { state.method = method; render(); });
+      wrap.appendChild(button);
+    });
   }
 
   function renderSites() {
@@ -336,25 +355,40 @@
     if (status === "ok" && streak && !state.streakConfirmed) status = "streak";
     slip.className = status;
 
+    const fields = el("fields");
+    fields.replaceChildren();
+    function field(label, value) {
+      const row = document.createElement("div");
+      const name = document.createElement("span");
+      name.textContent = label;
+      const val = document.createElement("b");
+      val.textContent = value;
+      row.append(name, val);
+      fields.appendChild(row);
+    }
     if (!item || result.totalOz == null) {
-      el("kicker").textContent = "GorillaDesk Quantity";
+      el("kicker").textContent = "Total Concen";
       el("answer").textContent = "—";
-      el("detail").textContent = "Pick the product, the ounces in each gallon, and the gallons you sprayed.";
-      el("reason").textContent = "";
+      el("reason").textContent = "Pick the product, the ounces in each gallon, and the finished gallons.";
     } else {
       el("kicker").textContent = status === "ok" || status === "streak"
-        ? "Type this into GorillaDesk Quantity"
-        : (status === "need-area" ? "Quantity is ready. Finish the area check." : "Do not enter this yet");
-      el("answer").textContent = C.formatOz(result.totalOz) + " fl oz";
-      const bits = [
-        item.name,
-        "Dilution " + result.dilution + (result.percent ? " (" + result.percent + ")" : ""),
-        C.formatOz(state.gallons) + " gal finished spray",
-      ];
-      if (result.per1000 != null) bits.push(C.formatOz(result.per1000) + " fl oz per 1,000 sq ft");
-      el("detail").textContent = bits.join(" · ");
+        ? "Total Concen for Add Material"
+        : (status === "need-area" ? "Total Concen is ready. Finish the area." : "Do not enter this yet");
+      el("answer").textContent = C.formatOz(result.totalOz) + " floz";
+      field("Material", item.name);
+      field("Unit", "floz");
+      field("In each gallon", result.dilution + (result.percent ? " (" + result.percent + ")" : ""));
+      field("Finished Dilution (Gallons)", C.formatOz(state.gallons));
+      if (state.method) field("Method", state.method);
+      if (state.site) field("Locations", state.site);
+      if (state.pests.length) field("Target Pest(s)", state.pests.join(", "));
+      if (result.per1000 != null) {
+        field("Area/Quantity", String(Math.round(state.sqft)));
+        field("Area unit", "Square ft");
+      }
+      if (usesFoundation() && state.linearFeet > 0) field("Foundation", state.linearFeet + " linear ft");
       el("reason").textContent = status === "ok"
-        ? "Unit is fl oz. Quantity is the jug, not the water."
+        ? "If the amount box still says 1 fl oz, change it. 1 fl oz is only this stop when Total Concen says 1.00."
         : (status === "streak"
           ? "Same total as your last 4 stops with this product. Confirm it if this house really took that much."
           : result.reason);
@@ -363,10 +397,12 @@
     const showStreak = status === "streak" || (result.status === "ok" && streak);
     el("streak-row").hidden = !showStreak;
     el("streak-ok").checked = state.streakConfirmed;
-    const ready = status === "ok" && state.tech && state.pests.length > 0 && state.site;
+    const ready = status === "ok" && state.tech && state.method && state.site && state.pests.length > 0;
     el("copy").disabled = !ready;
     if (result.status === "need-input") el("copy").textContent = "Pick the product, the dose, and the gallons";
     else if (!state.tech) el("copy").textContent = "Pick your name first";
+    else if (!state.method) el("copy").textContent = "Pick the method";
+    else if (!state.site) el("copy").textContent = "Pick the location";
     else if (!state.pests.length) el("copy").textContent = "Pick the pest, then copy";
     else el("copy").textContent = "Copy the slip";
     if (result.status !== "ok" && result.status !== "need-input") el("copy").textContent = "Fix the red or yellow line first";
@@ -406,6 +442,7 @@
     renderDoses();
     renderGallons();
     renderArea();
+    renderMethods();
     renderSites();
     renderPests();
     renderSlip();
@@ -452,6 +489,7 @@
       sqft: usesFoundation() ? 0 : state.sqft,
       linearFeet: usesFoundation() ? state.linearFeet : 0,
       site: state.site,
+      method: state.method,
       pests: state.pests,
     });
     try { await navigator.clipboard.writeText(slip); }
