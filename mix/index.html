@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0f0a">
+<title>Crosstown mix check</title>
+<style>
+  :root {
+    --g: #7dce7a;
+    --gd: #1f6b32;
+    --ink: #f3f6ef;
+    --muted: #b7c2ae;
+    --line: rgba(255,255,255,.1);
+    --card: #171d14;
+    --card2: #21291c;
+    --bad: #ff8d86;
+    --badbg: #3a1614;
+    --warn: #ffc56b;
+    --warnbg: #3a2c12;
+    --okbg: #16301c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0c0f0a; color: var(--ink); font-family: "Segoe UI", system-ui, sans-serif; }
+  body { max-width: 520px; margin: 0 auto; padding: 16px 16px 120px; }
+  header h1 { font-size: 22px; margin: 0; }
+  header p { margin: 6px 0 0; color: var(--muted); font-size: 14px; line-height: 1.4; }
+  h2 { font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  button, .choice {
+    font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 12px; cursor: pointer; text-align: left;
+  }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--g); outline-offset: 2px; }
+  .choice.on { background: var(--okbg); border-color: var(--g); }
+  .tech { min-width: 96px; font-size: 16px; font-weight: 650; }
+  .product { flex: 1 1 46%; min-height: 72px; }
+  .product b { display: block; font-size: 16px; }
+  .product span { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+  .dose { min-width: 104px; flex: 1; }
+  .dose b { display: block; font-size: 22px; }
+  .dose span { color: var(--muted); font-size: 12px; }
+  .stepper { display: flex; align-items: center; gap: 8px; }
+  .stepper button { width: 64px; height: 64px; font-size: 32px; text-align: center; padding: 0; }
+  .stepper .val { flex: 1; text-align: center; }
+  .stepper .val strong { display: block; font-size: 36px; line-height: 1; }
+  .stepper .val em { font-style: normal; color: var(--muted); font-size: 13px; }
+  .presets { margin-top: 8px; }
+  .presets button { padding: 10px 12px; font-size: 15px; }
+  label.field { display: block; margin-top: 8px; color: var(--muted); font-size: 13px; }
+  input[type="number"], input[type="text"] {
+    width: 100%; margin-top: 4px; background: var(--card); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px; font-size: 16px;
+  }
+  #slip {
+    position: sticky; bottom: 12px; margin-top: 18px; border-radius: 16px; padding: 14px;
+    background: var(--card2); border: 1px solid var(--line);
+  }
+  #slip.ok { background: var(--okbg); border-color: #2f7a3a; }
+  #slip.over, #slip.bad-dose { background: var(--badbg); border-color: #8a3a34; }
+  #slip.need-area, #slip.streak { background: var(--warnbg); border-color: #8a6a2a; }
+  #answer { font-size: 42px; font-weight: 750; line-height: 1; margin: 4px 0; }
+  #slip p { margin: 6px 0; font-size: 14px; line-height: 1.35; }
+  #reason { color: var(--warn); }
+  #slip.over #reason, #slip.bad-dose #reason { color: var(--bad); }
+  #copy {
+    width: 100%; margin-top: 8px; background: var(--gd); border: 0; font-weight: 700;
+    text-align: center; font-size: 16px;
+  }
+  #copy:disabled { background: #2a3126; color: #8b9484; }
+  .check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; margin-top: 8px; }
+  .today { font-size: 13px; color: var(--muted); }
+  .today div { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  #office { display: none; background: var(--card); border-radius: 16px; padding: 12px; }
+  #office.open { display: block; }
+  .linkish { background: none; border: 0; color: var(--g); padding: 0; font-size: 14px; }
+  .src { font-size: 12px; color: var(--muted); line-height: 1.4; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mix check</h1>
+  <p>Tap what you put in the tank. The page does the multiplication and tells you the one number to type into GorillaDesk Quantity. Quantity is the product from the jug, not the gallons of water.</p>
+</header>
+
+<h2>Who sprayed</h2>
+<div class="row" id="techs"></div>
+
+<h2>Product</h2>
+<div class="row" id="products"></div>
+<p class="src" id="source"></p>
+
+<h2>Ounces of product in each gallon</h2>
+<div class="row" id="doses"></div>
+
+<h2>Gallons you sprayed</h2>
+<div class="stepper">
+  <button type="button" id="gal-down" aria-label="Less gallons">−</button>
+  <div class="val"><strong id="gal-val">1.00</strong><em>gallons of finished spray</em></div>
+  <button type="button" id="gal-up" aria-label="More gallons">+</button>
+</div>
+<div class="row presets" id="gal-presets"></div>
+
+<div id="area-block">
+  <h2 id="area-title">Square feet you actually wet</h2>
+  <div class="stepper">
+    <button type="button" id="area-down" aria-label="Less area">−</button>
+    <div class="val"><strong id="area-val">—</strong><em id="area-unit">sq ft</em></div>
+    <button type="button" id="area-up" aria-label="More area">+</button>
+  </div>
+</div>
+
+<h2>Where</h2>
+<div class="row" id="sites"></div>
+
+<h2>Pest</h2>
+<div class="row" id="pests"></div>
+
+<section id="slip" aria-live="polite">
+  <div id="kicker">GorillaDesk Quantity</div>
+  <div id="answer">—</div>
+  <p id="detail"></p>
+  <p id="reason"></p>
+  <label class="check" id="streak-row" hidden>
+    <input type="checkbox" id="streak-ok">
+    <span>This house really used this much. It is the same total as my last 4 stops with this product.</span>
+  </label>
+  <button type="button" id="copy" disabled>Copy the slip</button>
+</section>
+
+<h2>On this phone today</h2>
+<div class="today" id="today"></div>
+
+<p><button type="button" class="linkish" id="office-toggle">Office: label rates</button></p>
+<section id="office">
+  <p class="src">These buttons are the rates read off the labels named below. If a jug in the truck says something else, change it here before the crew uses it. Add the dilution lines to GorillaDesk once, under Settings, Addons, Material Usage, Dilution, so a tech picks the line instead of typing it.</p>
+  <div id="office-list"></div>
+  <h2>Add a product from the jug</h2>
+  <label class="field">Name<input id="new-name" type="text" maxlength="60"></label>
+  <label class="field">EPA number<input id="new-epa" type="text" maxlength="40"></label>
+  <label class="field">Ounces per gallon on the label, separated by commas<input id="new-doses" type="text" placeholder="0.5, 1"></label>
+  <label class="field">Max fl oz of product per 1,000 sq ft, if the label has one<input id="new-max" type="number" min="0" step="0.01"></label>
+  <button type="button" id="add-product">Save this product on this phone</button>
+  <p><button type="button" class="linkish" id="reset-products">Put the original five products back</button></p>
+</section>
+
+<script src="mix-calc.js"></script>
+<script>
+(function () {
+  const C = window.MixCalc;
+  const TECHS = ["Joseph", "David", "Ben", "Sam", "Ross", "Sebastian", "Kimbre"];
+  const SITES = ["Exterior foundation", "Interior crack and crevice", "Eaves and windows", "Lawn or ornamentals"];
+  const PESTS = ["ants", "spiders", "roaches", "earwigs", "wasps", "bed bugs"];
+  const KEYS = { tech: "crosstown-mix-tech", products: "crosstown-mix-products-v1", history: "crosstown-mix-history-v1" };
+
+  const state = {
+    tech: localStorage.getItem(KEYS.tech) || "",
+    productId: "",
+    oz: 0,
+    gallons: 1,
+    sqft: 0,
+    linearFeet: 0,
+    site: "Exterior foundation",
+    pests: [],
+    streakConfirmed: false,
+  };
+
+  function loadProducts() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(KEYS.products) || "null");
+      if (Array.isArray(saved) && saved.length) return saved;
+    } catch (e) {}
+    return C.PRODUCTS.map((product) => Object.assign({}, product, { doses: product.doses.map((dose) => Object.assign({}, dose)) }));
+  }
+  let products = loadProducts();
+  function saveProducts() { localStorage.setItem(KEYS.products, JSON.stringify(products)); }
+  function history() {
+    try { return JSON.parse(localStorage.getItem(KEYS.history) || "[]"); }
+    catch (e) { return []; }
+  }
+  function saveHistory(rows) { localStorage.setItem(KEYS.history, JSON.stringify(rows.slice(0, 80))); }
+
+  const el = (id) => document.getElementById(id);
+  function chip(label, on, className) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = className + (on ? " on" : "");
+    button.textContent = label;
+    return button;
+  }
+
+  function product() { return products.find((item) => item.id === state.productId) || null; }
+  function usesFoundation() { return !!(product() && product().foundationQuartsPer160); }
+
+  function renderTechs() {
+    const wrap = el("techs");
+    wrap.replaceChildren();
+    TECHS.forEach((name) => {
+      const button = chip(name, state.tech === name, "choice tech");
+      button.addEventListener("click", () => {
+        state.tech = name;
+        state.streakConfirmed = false;
+        localStorage.setItem(KEYS.tech, name);
+        render();
+      });
+      wrap.appendChild(button);
+    });
+  }
+
+  function renderProducts() {
+    const wrap = el("products");
+    wrap.replaceChildren();
+    products.forEach((item) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "choice product" + (state.productId === item.id ? " on" : "");
+      const name = document.createElement("b");
+      name.textContent = item.name;
+      const epa = document.createElement("span");
+      epa.textContent = "EPA " + item.epa;
+      button.append(name, epa);
+      button.addEventListener("click", () => {
+        state.productId = item.id;
+        state.oz = 0;
+        state.sqft = 0;
+        state.linearFeet = 0;
+        state.streakConfirmed = false;
+        render();
+      });
+      wrap.appendChild(button);
+    });
+    el("source").textContent = product() ? product().source : "Pick the jug. Only the rates on that label show up next.";
+  }
+
+  function renderDoses() {
+    const wrap = el("doses");
+    wrap.replaceChildren();
+    const item = product();
+    if (!item) {
+      wrap.textContent = "Pick a product first.";
+      return;
+    }
+    item.doses.forEach((dose) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "choice dose" + (Math.abs(state.oz - dose.oz) < 0.001 ? " on" : "");
+      const amount = document.createElement("b");
+      amount.textContent = C.formatOz(dose.oz);
+      const hint = document.createElement("span");
+      hint.textContent = dose.hint || "fl oz in each gallon";
+      button.append(amount, hint);
+      button.addEventListener("click", () => {
+        state.oz = dose.oz;
+        state.streakConfirmed = false;
+        render();
+      });
+      wrap.appendChild(button);
+    });
+  }
+
+  function renderGallons() {
+    el("gal-val").textContent = C.formatOz(state.gallons);
+    const wrap = el("gal-presets");
+    wrap.replaceChildren();
+    [0.5, 1, 1.5, 2, 3, 4, 5].forEach((value) => {
+      const button = chip(C.formatOz(value), Math.abs(state.gallons - value) < 0.001, "choice");
+      button.addEventListener("click", () => {
+        state.gallons = value;
+        state.streakConfirmed = false;
+        render();
+      });
+      wrap.appendChild(button);
+    });
+  }
+
+  function renderArea() {
+    const foundation = usesFoundation();
+    el("area-title").textContent = foundation ? "Linear feet of foundation you sprayed" : "Square feet you actually wet";
+    el("area-unit").textContent = foundation ? "linear feet" : "sq ft";
+    const value = foundation ? state.linearFeet : state.sqft;
+    el("area-val").textContent = value > 0 ? String(Math.round(value)) : "—";
+  }
+
+  function renderSites() {
+    const wrap = el("sites");
+    wrap.replaceChildren();
+    SITES.forEach((site) => {
+      const button = chip(site, state.site === site, "choice");
+      button.addEventListener("click", () => { state.site = site; render(); });
+      wrap.appendChild(button);
+    });
+  }
+
+  function renderPests() {
+    const wrap = el("pests");
+    wrap.replaceChildren();
+    PESTS.forEach((pest) => {
+      const button = chip(pest, state.pests.includes(pest), "choice");
+      button.addEventListener("click", () => {
+        state.pests = state.pests.includes(pest)
+          ? state.pests.filter((item) => item !== pest)
+          : state.pests.concat(pest);
+        render();
+      });
+      wrap.appendChild(button);
+    });
+  }
+
+  function currentResult() {
+    return C.calculate({
+      product: product(),
+      gallons: state.gallons,
+      ozPerGallon: state.oz,
+      sqft: usesFoundation() ? 0 : state.sqft,
+      linearFeet: usesFoundation() ? state.linearFeet : 0,
+      pests: state.pests,
+    });
+  }
+
+  function whenLabel() {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      weekday: "short", month: "short", day: "numeric", year: "numeric",
+      hour: "numeric", minute: "2-digit", timeZoneName: "short",
+    }).format(new Date());
+  }
+
+  function renderSlip() {
+    const slip = el("slip");
+    const result = currentResult();
+    const item = product();
+    const streak = item && result.totalOz != null && C.sameAmountStreak(history(), {
+      tech: state.tech, productId: item.id, totalOz: result.totalOz,
+    });
+    let status = result.status;
+    if (status === "ok" && streak && !state.streakConfirmed) status = "streak";
+    slip.className = status;
+
+    if (!item || result.totalOz == null) {
+      el("kicker").textContent = "GorillaDesk Quantity";
+      el("answer").textContent = "—";
+      el("detail").textContent = "Pick the product, the ounces in each gallon, and the gallons you sprayed.";
+      el("reason").textContent = "";
+    } else {
+      el("kicker").textContent = status === "ok" || status === "streak"
+        ? "Type this into GorillaDesk Quantity"
+        : (status === "need-area" ? "Quantity is ready. Finish the area check." : "Do not enter this yet");
+      el("answer").textContent = C.formatOz(result.totalOz) + " fl oz";
+      const bits = [
+        item.name,
+        "Dilution " + result.dilution + (result.percent ? " (" + result.percent + ")" : ""),
+        C.formatOz(state.gallons) + " gal finished spray",
+      ];
+      if (result.per1000 != null) bits.push(C.formatOz(result.per1000) + " fl oz per 1,000 sq ft");
+      el("detail").textContent = bits.join(" · ");
+      el("reason").textContent = status === "ok"
+        ? "Unit is fl oz. Quantity is the jug, not the water."
+        : (status === "streak"
+          ? "Same total as your last 4 stops with this product. Confirm it if this house really took that much."
+          : result.reason);
+    }
+
+    const showStreak = status === "streak" || (result.status === "ok" && streak);
+    el("streak-row").hidden = !showStreak;
+    el("streak-ok").checked = state.streakConfirmed;
+    const ready = status === "ok" && state.tech && state.pests.length > 0 && state.site;
+    el("copy").disabled = !ready;
+    if (result.status === "need-input") el("copy").textContent = "Pick the product, the dose, and the gallons";
+    else if (!state.tech) el("copy").textContent = "Pick your name first";
+    else if (!state.pests.length) el("copy").textContent = "Pick the pest, then copy";
+    else el("copy").textContent = "Copy the slip";
+    if (result.status !== "ok" && result.status !== "need-input") el("copy").textContent = "Fix the red or yellow line first";
+    if (status === "streak") el("copy").textContent = "Confirm this house, then copy";
+  }
+
+  function renderToday() {
+    const wrap = el("today");
+    const rows = history().filter((row) => row.tech === state.tech).slice(0, 8);
+    wrap.replaceChildren();
+    if (!rows.length) {
+      wrap.textContent = "Nothing saved on this phone yet.";
+      return;
+    }
+    rows.forEach((row) => {
+      const line = document.createElement("div");
+      line.textContent = row.when + " · " + row.productName + " · " + row.totalText;
+      wrap.appendChild(line);
+    });
+  }
+
+  function renderOffice() {
+    const wrap = el("office-list");
+    wrap.replaceChildren();
+    products.forEach((item) => {
+      const block = document.createElement("p");
+      block.className = "src";
+      const doses = item.doses.map((dose) => C.formatOz(dose.oz) + " fl oz per gallon").join(", ");
+      block.textContent = item.name + " (EPA " + item.epa + "): " + doses + ". " + (item.source || "");
+      wrap.appendChild(block);
+    });
+  }
+
+  function render() {
+    renderTechs();
+    renderProducts();
+    renderDoses();
+    renderGallons();
+    renderArea();
+    renderSites();
+    renderPests();
+    renderSlip();
+    renderToday();
+    renderOffice();
+  }
+
+  function bumpGallons(delta) {
+    const next = C.round2(state.gallons + delta);
+    state.gallons = Math.min(20, Math.max(0.25, next));
+    state.streakConfirmed = false;
+    render();
+  }
+  function bumpArea(delta) {
+    if (usesFoundation()) {
+      state.linearFeet = Math.max(0, Math.round(state.linearFeet + delta));
+    } else {
+      state.sqft = Math.max(0, Math.round(state.sqft + delta));
+    }
+    state.streakConfirmed = false;
+    render();
+  }
+
+  el("gal-down").addEventListener("click", () => bumpGallons(-0.5));
+  el("gal-up").addEventListener("click", () => bumpGallons(0.5));
+  el("area-down").addEventListener("click", () => bumpArea(usesFoundation() ? -10 : -100));
+  el("area-up").addEventListener("click", () => bumpArea(usesFoundation() ? 10 : 100));
+  el("streak-ok").addEventListener("change", () => {
+    state.streakConfirmed = el("streak-ok").checked;
+    render();
+  });
+
+  el("copy").addEventListener("click", async () => {
+    const item = product();
+    const result = currentResult();
+    if (!item || result.status !== "ok" || !state.tech) return;
+    const when = whenLabel();
+    const slip = C.buildSlip({
+      tech: state.tech,
+      when: when,
+      product: item,
+      result: result,
+      gallons: state.gallons,
+      sqft: usesFoundation() ? 0 : state.sqft,
+      linearFeet: usesFoundation() ? state.linearFeet : 0,
+      site: state.site,
+      pests: state.pests,
+    });
+    try { await navigator.clipboard.writeText(slip); }
+    catch (e) { window.prompt("Copy this into the job note", slip); }
+    const rows = history();
+    rows.unshift({
+      tech: state.tech,
+      productId: item.id,
+      productName: item.name,
+      totalOz: result.totalOz,
+      totalText: C.formatOz(result.totalOz) + " fl oz",
+      gallons: state.gallons,
+      when: when,
+    });
+    saveHistory(rows);
+    state.streakConfirmed = false;
+    el("copy").textContent = "Copied";
+    renderToday();
+  });
+
+  el("office-toggle").addEventListener("click", () => el("office").classList.toggle("open"));
+  el("add-product").addEventListener("click", () => {
+    const name = el("new-name").value.trim();
+    const epa = el("new-epa").value.trim();
+    const doses = el("new-doses").value.split(",").map((part) => Number(part.trim())).filter((n) => n > 0);
+    const max = Number(el("new-max").value);
+    if (!name || !epa || !doses.length) return;
+    products.push({
+      id: "custom-" + Date.now(),
+      name: name,
+      epa: epa,
+      source: "Added on this phone from the jug. EPA " + epa + ".",
+      maxOzPer1000: max > 0 ? max : undefined,
+      doses: doses.map((oz) => ({ oz: oz, percent: "", hint: C.formatOz(oz) + " per gallon" })),
+    });
+    saveProducts();
+    el("new-name").value = "";
+    el("new-epa").value = "";
+    el("new-doses").value = "";
+    el("new-max").value = "";
+    render();
+  });
+  el("reset-products").addEventListener("click", () => {
+    localStorage.removeItem(KEYS.products);
+    products = loadProducts();
+    state.productId = "";
+    state.oz = 0;
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
