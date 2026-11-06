@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0f0a">
+<title>Crosstown coaching</title>
+<style>
+  :root {
+    --g: #7dce7a; --gd: #1f6b32; --ink: #f3f6ef; --muted: #b7c2ae;
+    --line: rgba(255,255,255,.1); --card: #171d14; --card2: #21291c;
+    --bad: #ff8d86; --badbg: #3a1614; --warn: #ffc56b; --warnbg: #3a2c12; --okbg: #16301c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0c0f0a; color: var(--ink); font-family: "Segoe UI", system-ui, sans-serif; }
+  body { max-width: 720px; margin: 0 auto; padding: 16px 16px 48px; }
+  header h1 { font-size: 22px; margin: 0; }
+  header p, .lead { margin: 6px 0 0; color: var(--muted); font-size: 15px; line-height: 1.45; }
+  h2 { font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
+  a { color: var(--g); }
+  textarea, input, select, button {
+    font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px; font-size: 16px;
+  }
+  textarea { width: 100%; min-height: 120px; resize: vertical; }
+  button { cursor: pointer; font-weight: 700; }
+  button.primary { background: var(--gd); border: 0; }
+  button.ghost { background: transparent; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  label input, label select { width: 100%; }
+  .tech { min-width: 88px; font-weight: 650; }
+  .tech.on { background: var(--okbg); border-color: var(--g); }
+  .card { background: var(--card2); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-top: 12px; }
+  .card.over { background: var(--badbg); border-color: #8a3a34; }
+  .card.math, .card.repeat { background: var(--warnbg); border-color: #8a6a2a; }
+  .card h3 { margin: 0 0 4px; font-size: 18px; }
+  .kicker { color: var(--warn); font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+  .card.over .kicker { color: var(--bad); }
+  .say { font-size: 17px; line-height: 1.4; margin: 8px 0; }
+  .detail, .check { color: var(--muted); font-size: 14px; line-height: 1.4; margin: 6px 0; }
+  .line { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+  .line button { padding: 8px 10px; }
+  .empty { color: var(--muted); }
+  .okline { color: var(--g); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Coach the week</h1>
+  <p>Pull GorillaDesk → Reports → Material Use → All Detailed → Jobs. Add each line that is the same amount again and again, or a total that does not match the gallons. Read the card out loud. Next week, check that one product again.</p>
+  <p class="lead"><a href="index.html">Back to the mix check</a></p>
+</header>
+
+<h2>Paste lines from the report</h2>
+<textarea id="paste" placeholder="Joseph, Bifen I/T, 0.50 floz, 6 stops&#10;David, Cyzmic CS, 0.50 floz, 1.5 gal, 0.40 per gal&#10;Ross, Bifen I/T, 1.50 floz, 1.5 gal, 1.00 per gal, 1000 sq ft"></textarea>
+<div class="row" style="margin-top:8px">
+  <button type="button" class="primary" id="add-paste">Add these lines</button>
+</div>
+<p class="detail" id="paste-note"></p>
+
+<h2>Or add one pattern</h2>
+<div class="row" id="techs"></div>
+<label style="margin-top:8px">Other name
+  <input id="tech-other" type="text" autocomplete="name" placeholder="Type a name">
+</label>
+<div class="grid" style="margin-top:8px">
+  <label>Material
+    <select id="product"></select>
+  </label>
+  <label>Amount they wrote
+    <input id="total" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.50">
+  </label>
+  <label>Stops with that amount
+    <input id="stops" type="number" min="1" step="1" value="1" inputmode="numeric">
+  </label>
+  <label>Finished gallons
+    <input id="gallons" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Optional">
+  </label>
+  <label>Amount in each gallon
+    <input id="dose" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Optional">
+  </label>
+  <label>Square feet
+    <input id="sqft" type="number" min="0" step="1" inputmode="numeric" placeholder="Optional">
+  </label>
+</div>
+<div class="row" style="margin-top:8px">
+  <button type="button" class="primary" id="add-line">Add this line</button>
+</div>
+<p class="detail" id="form-note"></p>
+
+<h2>Lines for this week</h2>
+<div id="lines"></div>
+
+<h2>Say this</h2>
+<div id="cards"></div>
+<div class="row" style="margin-top:12px">
+  <button type="button" class="primary" id="copy">Copy the coaching</button>
+  <button type="button" class="ghost" id="clear">Clear this week</button>
+</div>
+
+<script src="mix-calc.js"></script>
+<script>
+(function () {
+  const C = window.MixCalc;
+  const TECHS = ["Joseph", "David", "Ben", "Sam", "Ross", "Sebastian", "Kimbre"];
+  const KEY = "crosstown-coach-lines-v1";
+  const state = { tech: "", lines: load() };
+
+  const el = (id) => document.getElementById(id);
+
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY) || "[]"); }
+    catch (e) { return []; }
+  }
+  function save() {
+    localStorage.setItem(KEY, JSON.stringify(state.lines));
+  }
+  function num(id) {
+    const value = el(id).value.trim();
+    if (!value) return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  function techName() {
+    return el("tech-other").value.trim() || state.tech;
+  }
+
+  function renderTechs() {
+    const row = el("techs");
+    row.replaceChildren();
+    TECHS.forEach((name) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "tech" + (state.tech === name && !el("tech-other").value.trim() ? " on" : "");
+      button.textContent = name;
+      button.addEventListener("click", () => {
+        state.tech = name;
+        el("tech-other").value = "";
+        render();
+      });
+      row.appendChild(button);
+    });
+  }
+
+  function renderProducts() {
+    const select = el("product");
+    if (select.options.length) return;
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = "Pick a material";
+    select.appendChild(blank);
+    C.PRODUCTS.forEach((product) => {
+      const option = document.createElement("option");
+      option.value = product.id;
+      option.textContent = product.name;
+      select.appendChild(option);
+    });
+  }
+
+  function renderLines() {
+    const box = el("lines");
+    box.replaceChildren();
+    if (!state.lines.length) {
+      const p = document.createElement("p");
+      p.className = "empty";
+      p.textContent = "Nothing entered yet.";
+      box.appendChild(p);
+      return;
+    }
+    state.lines.forEach((line, index) => {
+      const product = C.findProduct(line.productId);
+      const row = document.createElement("div");
+      row.className = "line";
+      const text = document.createElement("div");
+      const stopCount = line.stops || 1;
+      const bits = [line.tech, product ? product.name : line.productId, C.formatAmount(line.totalOz, product ? product.unit : "floz") + " " + (product ? product.unit : ""), stopCount + (stopCount === 1 ? " stop" : " stops")];
+      if (line.gallons) bits.push(line.gallons + " gal");
+      if (line.ozPerGallon) bits.push(line.ozPerGallon + " per gal");
+      if (line.sqft) bits.push(line.sqft + " sq ft");
+      text.textContent = bits.join(" · ");
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "ghost";
+      remove.textContent = "Remove";
+      remove.addEventListener("click", () => {
+        state.lines.splice(index, 1);
+        save();
+        render();
+      });
+      row.append(text, remove);
+      box.appendChild(row);
+    });
+  }
+
+  function renderCards() {
+    const box = el("cards");
+    box.replaceChildren();
+    const report = C.coachWeek(state.lines);
+    if (report.empty) {
+      const p = document.createElement("p");
+      p.className = "empty";
+      p.textContent = "Add the week, then the cards show what to say.";
+      box.appendChild(p);
+      return;
+    }
+    if (!report.flagged.length) {
+      const p = document.createElement("p");
+      p.className = "okline";
+      p.textContent = "Nothing to coach. The lines entered match the label math saved here.";
+      box.appendChild(p);
+    }
+    report.flagged.forEach((bucket) => {
+      bucket.notes.forEach((note) => {
+        const card = document.createElement("article");
+        card.className = "card " + note.kind;
+        const kicker = document.createElement("div");
+        kicker.className = "kicker";
+        kicker.textContent = note.tech + " — " + note.headline;
+        const title = document.createElement("h3");
+        title.textContent = note.productName;
+        const say = document.createElement("p");
+        say.className = "say";
+        say.textContent = note.say;
+        const check = document.createElement("p");
+        check.className = "check";
+        check.textContent = note.check;
+        const detail = document.createElement("p");
+        detail.className = "detail";
+        detail.textContent = note.detail;
+        card.append(kicker, title, say, check, detail);
+        box.appendChild(card);
+      });
+    });
+    if (report.clear.length) {
+      const p = document.createElement("p");
+      p.className = "okline";
+      p.textContent = "Nothing to coach for " + report.clear.join(", ") + ".";
+      box.appendChild(p);
+    }
+  }
+
+  function render() {
+    renderTechs();
+    renderProducts();
+    renderLines();
+    renderCards();
+  }
+
+  el("add-paste").addEventListener("click", () => {
+    const parsed = C.parseUsage(el("paste").value);
+    if (!parsed.entries.length) {
+      el("paste-note").textContent = parsed.skipped.length
+        ? "No material from the master list was on those lines."
+        : "Paste one stop per line.";
+      return;
+    }
+    state.lines = state.lines.concat(parsed.entries);
+    save();
+    el("paste").value = "";
+    el("paste-note").textContent = "Added " + parsed.entries.length + (parsed.entries.length === 1 ? " line." : " lines.")
+      + (parsed.skipped.length ? " Skipped " + parsed.skipped.length + " that did not name a material." : "");
+    render();
+  });
+
+  el("add-line").addEventListener("click", () => {
+    const tech = techName();
+    const product = C.findProduct(el("product").value);
+    const total = num("total");
+    const stops = num("stops") || 1;
+    if (!tech || !product || !(total > 0) || !(stops > 0)) {
+      el("form-note").textContent = "Pick the person, the material, and the amount they wrote.";
+      return;
+    }
+    state.lines.push({
+      tech: tech,
+      productId: product.id,
+      totalOz: total,
+      stops: stops,
+      gallons: num("gallons"),
+      ozPerGallon: num("dose"),
+      sqft: num("sqft"),
+    });
+    save();
+    el("form-note").textContent = "Added.";
+    el("total").value = "";
+    render();
+  });
+
+  el("tech-other").addEventListener("input", render);
+
+  el("copy").addEventListener("click", async () => {
+    const script = C.coachingScript(C.coachWeek(state.lines));
+    try { await navigator.clipboard.writeText(script); }
+    catch (e) { window.prompt("Copy the coaching", script); }
+    el("copy").textContent = "Copied";
+    setTimeout(() => { el("copy").textContent = "Copy the coaching"; }, 1200);
+  });
+
+  el("clear").addEventListener("click", () => {
+    state.lines = [];
+    save();
+    el("paste-note").textContent = "";
+    el("form-note").textContent = "";
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

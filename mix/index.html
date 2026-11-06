@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c0f0a">
+<title>Crosstown mix check</title>
+<style>
+  :root {
+    --g: #7dce7a; --gd: #1f6b32; --ink: #f3f6ef; --muted: #b7c2ae;
+    --line: rgba(255,255,255,.1); --card: #171d14; --card2: #21291c;
+    --bad: #ff8d86; --badbg: #3a1614; --warn: #ffc56b; --warnbg: #3a2c12; --okbg: #16301c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0c0f0a; color: var(--ink); font-family: "Segoe UI", system-ui, sans-serif; }
+  body { max-width: 520px; margin: 0 auto; padding: 16px 16px 140px; }
+  header h1 { font-size: 22px; margin: 0; }
+  header p { margin: 6px 0 0; color: var(--muted); font-size: 14px; line-height: 1.4; }
+  h2 { font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 22px 0 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  button, .choice, select {
+    font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 12px; cursor: pointer; text-align: left;
+  }
+  select { width: 100%; font-size: 16px; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--g); outline-offset: 2px; }
+  .choice.on { background: var(--okbg); border-color: var(--g); }
+  .tech { min-width: 96px; font-size: 16px; font-weight: 650; }
+  .product { flex: 1 1 46%; min-height: 64px; }
+  .product b { display: block; font-size: 15px; }
+  .product span { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+  .dose, .gal { min-width: 96px; flex: 1; }
+  .dose b, .gal b { display: block; font-size: 18px; }
+  .dose span { color: var(--muted); font-size: 12px; }
+  .stepper { display: flex; align-items: center; gap: 8px; }
+  .stepper button { width: 64px; height: 64px; font-size: 32px; text-align: center; padding: 0; }
+  .stepper .val { flex: 1; text-align: center; }
+  .stepper .val strong { display: block; font-size: 36px; line-height: 1; }
+  .stepper .val em { font-style: normal; color: var(--muted); font-size: 13px; }
+  input[type="search"] {
+    width: 100%; background: var(--card); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px; font-size: 16px; margin-bottom: 8px;
+  }
+  #slip { position: sticky; bottom: 12px; margin-top: 18px; border-radius: 16px; padding: 14px; background: var(--card2); border: 1px solid var(--line); }
+  #slip.ok { background: var(--okbg); border-color: #2f7a3a; }
+  #slip.over, #slip.bad-dose { background: var(--badbg); border-color: #8a3a34; }
+  #slip.need-area, #slip.streak { background: var(--warnbg); border-color: #8a6a2a; }
+  #answer { font-size: 42px; font-weight: 750; line-height: 1; margin: 4px 0; }
+  #reason { margin: 6px 0; font-size: 14px; line-height: 1.35; color: var(--warn); }
+  #slip.over #reason, #slip.bad-dose #reason { color: var(--bad); }
+  #copy { width: 100%; margin-top: 8px; background: var(--gd); border: 0; font-weight: 700; text-align: center; font-size: 16px; }
+  #copy:disabled { background: #2a3126; color: #8b9484; }
+  .check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; margin-top: 8px; }
+  .fields { margin: 8px 0 0; }
+  .fields div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .fields span { color: var(--muted); }
+  .fields b { font-weight: 700; text-align: right; }
+  .src { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  a { color: var(--g); }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mix check</h1>
+  <p>Every button is a line from the Crosstown material master list. Liquids multiply the dose by the finished gallons. Dusts, baits, and traps are just the count.</p>
+</header>
+
+<h2>Who sprayed</h2>
+<div class="row" id="techs"></div>
+
+<h2>Material</h2>
+<input id="find" type="search" placeholder="Find a material" autocomplete="off">
+<div class="row" id="products"></div>
+<p class="src" id="source"></p>
+
+<div id="mix-block">
+  <h2 id="dose-title">Amount in each gallon</h2>
+  <div class="row" id="doses"></div>
+  <h2>Finished Dilution (Gallons)</h2>
+  <div class="row" id="gallons"></div>
+</div>
+
+<div id="count-block" class="hidden">
+  <h2 id="count-title">How many</h2>
+  <div class="stepper">
+    <button type="button" id="count-down" aria-label="Less">−</button>
+    <div class="val"><strong id="count-val">1</strong><em id="count-unit">units</em></div>
+    <button type="button" id="count-up" aria-label="More">+</button>
+  </div>
+</div>
+
+<h2>Method</h2>
+<select id="method"></select>
+
+<h2>Locations</h2>
+<select id="site"></select>
+
+<h2>Target Pest(s)</h2>
+<select id="pest-add"></select>
+<div class="row" id="pests"></div>
+
+<h2>Area/Quantity</h2>
+<div class="row" id="area-units"></div>
+<div class="stepper" id="area-step">
+  <button type="button" id="area-down" aria-label="Less area">−</button>
+  <div class="val"><strong id="area-val">—</strong><em id="area-unit">Square ft</em></div>
+  <button type="button" id="area-up" aria-label="More area">+</button>
+</div>
+
+<section id="slip" aria-live="polite">
+  <div id="kicker">Total Concen</div>
+  <div id="answer">—</div>
+  <div class="fields" id="fields"></div>
+  <p id="reason"></p>
+  <label class="check" id="streak-row" hidden>
+    <input type="checkbox" id="streak-ok">
+    <span>This stop really used this much. It matches my last 4 with this material.</span>
+  </label>
+  <button type="button" id="copy" disabled>Copy the slip</button>
+</section>
+
+<p class="src" id="office"></p>
+<p class="src"><a href="coach.html">Office coaching from the weekly Material Use report</a></p>
+
+<script src="mix-calc.js"></script>
+<script>
+(function () {
+  const C = window.MixCalc;
+  const TECHS = ["Joseph", "David", "Ben", "Sam", "Ross", "Sebastian", "Kimbre"];
+  const KEYS = { tech: "crosstown-mix-tech", history: "crosstown-mix-history-v3" };
+  const state = {
+    tech: localStorage.getItem(KEYS.tech) || "",
+    query: "",
+    productId: "",
+    oz: 0,
+    gallons: 1,
+    count: 1,
+    sqft: 0,
+    linearFeet: 0,
+    areaUnit: "",
+    site: "",
+    method: "",
+    pests: [],
+    streakConfirmed: false,
+  };
+
+  const el = (id) => document.getElementById(id);
+  function product() { return C.PRODUCTS.find((item) => item.id === state.productId) || null; }
+  function isMix() { const item = product(); return !!item && item.kind === "mix"; }
+  function history() {
+    try { return JSON.parse(localStorage.getItem(KEYS.history) || "[]"); }
+    catch (e) { return []; }
+  }
+  function saveHistory(rows) { localStorage.setItem(KEYS.history, JSON.stringify(rows.slice(0, 80))); }
+  function chip(label, on) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "choice" + (on ? " on" : "");
+    button.textContent = label;
+    return button;
+  }
+  function fillSelect(id, options, placeholder, current) {
+    const select = el(id);
+    select.replaceChildren();
+    const first = document.createElement("option");
+    first.value = "";
+    first.textContent = placeholder;
+    select.appendChild(first);
+    options.forEach((option) => {
+      const node = document.createElement("option");
+      node.value = option;
+      node.textContent = option;
+      if (option === current) node.selected = true;
+      select.appendChild(node);
+    });
+  }
+
+  function renderTechs() {
+    const wrap = el("techs");
+    wrap.replaceChildren();
+    TECHS.forEach((name) => {
+      const button = chip(name, state.tech === name);
+      button.classList.add("tech");
+      button.addEventListener("click", () => {
+        state.tech = name;
+        state.streakConfirmed = false;
+        localStorage.setItem(KEYS.tech, name);
+        render();
+      });
+      wrap.appendChild(button);
+    });
+  }
+
+  function renderProducts() {
+    const wrap = el("products");
+    wrap.replaceChildren();
+    const query = state.query.trim().toLowerCase();
+    C.PRODUCTS.filter((item) => !query || item.name.toLowerCase().includes(query)).forEach((item) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "choice product" + (state.productId === item.id ? " on" : "");
+      const name = document.createElement("b");
+      name.textContent = item.name;
+      const meta = document.createElement("span");
+      meta.textContent = item.kind === "mix" ? "Mix · " + item.unit : "Count · " + item.unit;
+      button.append(name, meta);
+      button.addEventListener("click", () => {
+        state.productId = item.id;
+        state.oz = 0;
+        state.count = 1;
+        state.sqft = 0;
+        state.linearFeet = 0;
+        state.areaUnit = "";
+        state.method = item.method || "";
+        state.pests = [];
+        state.streakConfirmed = false;
+        render();
+      });
+      wrap.appendChild(button);
+    });
+    el("source").textContent = product() ? product().source : "Pick the material from the list.";
+  }
+
+  function renderDoses() {
+    const item = product();
+    el("mix-block").classList.toggle("hidden", !isMix());
+    el("count-block").classList.toggle("hidden", !item || isMix());
+    const wrap = el("doses");
+    wrap.replaceChildren();
+    if (!isMix()) return;
+    el("dose-title").textContent = item.unit === "grams" ? "Grams in each gallon" : "Ounces in each gallon";
+    item.doses.forEach((dose) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "choice dose" + (Math.abs(state.oz - dose.oz) < 0.001 ? " on" : "");
+      const amount = document.createElement("b");
+      amount.textContent = C.formatAmount(dose.oz, item.unit);
+      const hint = document.createElement("span");
+      hint.textContent = dose.hint || item.unit;
+      button.append(amount, hint);
+      button.addEventListener("click", () => { state.oz = dose.oz; state.streakConfirmed = false; render(); });
+      wrap.appendChild(button);
+    });
+    const gallons = el("gallons");
+    gallons.replaceChildren();
+    C.GALLONS.forEach((row) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "choice gal" + (Math.abs(state.gallons - row.n) < 0.001 ? " on" : "");
+      const amount = document.createElement("b");
+      amount.textContent = row.label.replace(" Gallons", "");
+      button.appendChild(amount);
+      button.addEventListener("click", () => { state.gallons = row.n; state.streakConfirmed = false; render(); });
+      gallons.appendChild(button);
+    });
+  }
+
+  function renderCount() {
+    const item = product();
+    if (!item || isMix()) return;
+    el("count-title").textContent = "How many " + item.unit;
+    el("count-val").textContent = C.formatAmount(state.count, item.unit);
+    el("count-unit").textContent = item.unit;
+  }
+
+  function renderArea() {
+    const wrap = el("area-units");
+    wrap.replaceChildren();
+    C.AREA_UNITS.forEach((unit) => {
+      const button = chip(unit, state.areaUnit === unit);
+      button.addEventListener("click", () => { state.areaUnit = unit; state.streakConfirmed = false; render(); });
+      wrap.appendChild(button);
+    });
+    const showStep = state.areaUnit === "Square ft" || state.areaUnit === "Linear Feet";
+    el("area-step").classList.toggle("hidden", !showStep);
+    const value = state.areaUnit === "Linear Feet" ? state.linearFeet : state.sqft;
+    el("area-val").textContent = value > 0 ? String(Math.round(value)) : "—";
+    el("area-unit").textContent = state.areaUnit || "Square ft";
+  }
+
+  function renderPests() {
+    const wrap = el("pests");
+    wrap.replaceChildren();
+    state.pests.forEach((pest) => {
+      const button = chip(pest + " ×", true);
+      button.addEventListener("click", () => {
+        state.pests = state.pests.filter((item) => item !== pest);
+        render();
+      });
+      wrap.appendChild(button);
+    });
+  }
+
+  function currentResult() {
+    const item = product();
+    return C.calculate({
+      product: item,
+      gallons: state.gallons,
+      ozPerGallon: state.oz,
+      count: state.count,
+      sqft: state.areaUnit === "Square ft" ? state.sqft : 0,
+      linearFeet: state.areaUnit === "Linear Feet" ? state.linearFeet : 0,
+      pests: state.pests,
+      useFoundationLimit: !!(item && item.foundationQuartsPer160 && state.site === "Exterior Foundation" && state.areaUnit === "Linear Feet"),
+    });
+  }
+
+  function whenLabel() {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      weekday: "short", month: "short", day: "numeric", year: "numeric",
+      hour: "numeric", minute: "2-digit", timeZoneName: "short",
+    }).format(new Date());
+  }
+
+  function renderSlip() {
+    const slip = el("slip");
+    const item = product();
+    const result = currentResult();
+    const streak = item && result.totalOz != null && C.sameAmountStreak(history(), {
+      tech: state.tech, productId: item.id, totalOz: result.totalOz,
+    });
+    let status = result.status;
+    if (status === "ok" && streak && !state.streakConfirmed) status = "streak";
+    slip.className = status;
+    const fields = el("fields");
+    fields.replaceChildren();
+    function field(label, value) {
+      const row = document.createElement("div");
+      const name = document.createElement("span");
+      name.textContent = label;
+      const val = document.createElement("b");
+      val.textContent = value;
+      row.append(name, val);
+      fields.appendChild(row);
+    }
+    if (!item || result.totalOz == null) {
+      el("kicker").textContent = "Total Concen";
+      el("answer").textContent = "—";
+      el("reason").textContent = "Pick the material. Then the dose and the gallons, or the count.";
+    } else {
+      el("kicker").textContent = status === "ok" || status === "streak" ? "Total Concen" : (status === "need-area" ? "Total Concen is ready" : "Do not save this");
+      el("answer").textContent = C.formatAmount(result.totalOz, item.unit) + " " + item.unit;
+      field("Material", item.name);
+      field("Unit", item.unit);
+      if (result.dilution) field("In each gallon", result.dilution);
+      if (isMix()) field("Finished Dilution (Gallons)", C.gallonLabel(state.gallons));
+      if (state.method) field("Method", state.method);
+      if (state.site) field("Locations", state.site);
+      if (state.pests.length) field("Target Pest(s)", state.pests.join(", "));
+      if (state.areaUnit === "Square ft" && state.sqft > 0) field("Area/Quantity", state.sqft + " Square ft");
+      if (state.areaUnit === "Linear Feet" && state.linearFeet > 0) field("Area/Quantity", state.linearFeet + " Linear Feet");
+      if (state.areaUnit === "Localized Spots") field("Area/Quantity", "Localized Spots");
+      el("reason").textContent = status === "ok"
+        ? "These words match the master list."
+        : (status === "streak" ? "Same total as your last 4 stops with this material." : result.reason);
+    }
+    el("streak-row").hidden = !(status === "streak" || (result.status === "ok" && streak));
+    el("streak-ok").checked = state.streakConfirmed;
+    const ready = status === "ok" && state.tech && state.method && state.site && state.pests.length > 0 && state.areaUnit;
+    el("copy").disabled = !ready;
+    if (result.status === "need-input") el("copy").textContent = "Pick the material and the amount";
+    else if (!state.tech) el("copy").textContent = "Pick your name";
+    else if (!state.method) el("copy").textContent = "Pick the method";
+    else if (!state.site) el("copy").textContent = "Pick the location";
+    else if (!state.pests.length) el("copy").textContent = "Pick the pest";
+    else if (!state.areaUnit) el("copy").textContent = "Pick the area";
+    else el("copy").textContent = "Copy the slip";
+    if (result.status !== "ok" && result.status !== "need-input") el("copy").textContent = "Fix the red or yellow line first";
+    if (status === "streak") el("copy").textContent = "Confirm this stop, then copy";
+  }
+
+  function render() {
+    renderTechs();
+    renderProducts();
+    renderDoses();
+    renderCount();
+    renderArea();
+    renderPests();
+    fillSelect("method", C.METHODS, "Method", state.method);
+    fillSelect("site", C.LOCATIONS, "Location", state.site);
+    fillSelect("pest-add", C.PESTS.filter((pest) => !state.pests.includes(pest)), "Add a pest", "");
+    renderSlip();
+    const mixes = C.PRODUCTS.filter((item) => item.kind === "mix").map((item) => item.name).join(", ");
+    el("office").textContent = "Mix math is saved for " + mixes + ". Everything else is a count in the unit from the master list. Wind, temperature, and start/stop time still go on the job the same day.";
+  }
+
+  el("find").addEventListener("input", () => { state.query = el("find").value; renderProducts(); });
+  el("method").addEventListener("change", () => { state.method = el("method").value; render(); });
+  el("site").addEventListener("change", () => { state.site = el("site").value; state.streakConfirmed = false; render(); });
+  el("pest-add").addEventListener("change", () => {
+    if (el("pest-add").value) state.pests = state.pests.concat(el("pest-add").value);
+    render();
+  });
+  el("count-down").addEventListener("click", () => { state.count = Math.max(1, state.count - 1); state.streakConfirmed = false; render(); });
+  el("count-up").addEventListener("click", () => { state.count = Math.min(99, state.count + 1); state.streakConfirmed = false; render(); });
+  function bumpArea(delta) {
+    if (state.areaUnit === "Linear Feet") state.linearFeet = Math.max(0, state.linearFeet + delta);
+    else state.sqft = Math.max(0, state.sqft + delta);
+    state.streakConfirmed = false;
+    render();
+  }
+  el("area-down").addEventListener("click", () => bumpArea(state.areaUnit === "Linear Feet" ? -10 : -100));
+  el("area-up").addEventListener("click", () => bumpArea(state.areaUnit === "Linear Feet" ? 10 : 100));
+  el("streak-ok").addEventListener("change", () => { state.streakConfirmed = el("streak-ok").checked; render(); });
+  el("copy").addEventListener("click", async () => {
+    const item = product();
+    const result = currentResult();
+    if (!item || result.status !== "ok" || !state.tech) return;
+    const when = whenLabel();
+    const slip = C.buildSlip({
+      tech: state.tech,
+      when: when,
+      product: item,
+      result: result,
+      gallons: state.gallons,
+      gallonLabel: C.gallonLabel(state.gallons),
+      sqft: state.sqft,
+      linearFeet: state.linearFeet,
+      areaUnit: state.areaUnit,
+      site: state.site,
+      method: state.method,
+      pests: state.pests,
+    });
+    try { await navigator.clipboard.writeText(slip); }
+    catch (e) { window.prompt("Copy this into the job note", slip); }
+    const rows = history();
+    rows.unshift({ tech: state.tech, productId: item.id, totalOz: result.totalOz, when: when });
+    saveHistory(rows);
+    state.streakConfirmed = false;
+    el("copy").textContent = "Copied";
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
