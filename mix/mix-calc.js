@@ -229,6 +229,292 @@
     return recent.every(function (row) { return Math.abs(row.totalOz - entry.totalOz) < 0.051; });
   }
 
+  function findProduct(name) {
+    const needle = String(name || "").trim().toLowerCase();
+    if (!needle) return null;
+    return PRODUCTS.find(function (product) {
+      return product.id === needle || product.name.toLowerCase() === needle;
+    }) || PRODUCTS.find(function (product) {
+      return needle.length >= 4 && product.name.toLowerCase().indexOf(needle) !== -1;
+    }) || null;
+  }
+
+  function findProductInLine(line) {
+    const lower = String(line || "").toLowerCase();
+    const ranked = PRODUCTS.slice().sort(function (a, b) { return b.name.length - a.name.length; });
+    for (let i = 0; i < ranked.length; i++) {
+      const at = lower.indexOf(ranked[i].name.toLowerCase());
+      if (at !== -1) return { product: ranked[i], index: at };
+    }
+    return null;
+  }
+
+  function parseUsage(text) {
+    const entries = [];
+    const skipped = [];
+    String(text || "").split(/\r?\n/).forEach(function (raw) {
+      const line = raw.trim();
+      if (!line) return;
+      if (/^tech\b/i.test(line) && /material/i.test(line)) return;
+      const found = findProductInLine(line);
+      if (!found) {
+        skipped.push(line);
+        return;
+      }
+      const tech = line.slice(0, found.index).replace(/[,|\t]+/g, " ").replace(/\s+/g, " ").trim();
+      const rest = line.slice(found.index + found.product.name.length);
+      if (!tech) {
+        skipped.push(line);
+        return;
+      }
+      const stopsMatch = rest.match(/(\d+)\s*(stops|stop|jobs|job|times)\b/i);
+      const galMatch = rest.match(/(\d*\.?\d+)\s*(gallons|gallon|gals|gal)\b/i);
+      const doseMatch = rest.match(/(\d*\.?\d+)\s*(?:fl\.?\s*oz|oz|g|grams)?\s*(?:per|\/)\s*(?:gal|gallon)\b/i);
+      const sqMatch = rest.match(/(\d+(?:\.\d+)?)\s*(?:sq\.?\s*ft|square\s*feet|sqft)\b/i);
+      const lfMatch = rest.match(/(\d+(?:\.\d+)?)\s*(?:linear\s*feet|lin\.?\s*ft)\b/i);
+      let restNumbers = rest;
+      [stopsMatch, galMatch, doseMatch, sqMatch, lfMatch].forEach(function (match) {
+        if (match) restNumbers = restNumbers.replace(match[0], " ");
+      });
+      const totalMatch = restNumbers.match(/(\d*\.?\d+)/);
+      const totalOz = totalMatch ? Number(totalMatch[1]) : NaN;
+      if (!(totalOz > 0)) {
+        skipped.push(line);
+        return;
+      }
+      entries.push({
+        tech: tech,
+        productId: found.product.id,
+        totalOz: totalOz,
+        gallons: galMatch ? Number(galMatch[1]) : null,
+        ozPerGallon: doseMatch ? Number(doseMatch[1]) : null,
+        sqft: sqMatch ? Number(sqMatch[1]) : null,
+        linearFeet: lfMatch ? Number(lfMatch[1]) : null,
+        stops: stopsMatch ? Number(stopsMatch[1]) : 1,
+      });
+    });
+    return { entries: entries, skipped: skipped };
+  }
+
+  function speakNumber(n) {
+    if (!Number.isFinite(n)) return "";
+    const rounded = round2(n);
+    if (Math.abs(rounded - Math.round(rounded)) < 0.001) return String(Math.round(rounded));
+    return String(rounded);
+  }
+
+  function sayAmount(n, product) {
+    return formatAmount(n, product.unit) + " " + product.unit;
+  }
+
+  function closeAmount(a, b) {
+    return Math.abs(a - b) < 0.051;
+  }
+
+  function labelDoseForTotal(product, gallons, total) {
+    return (product.doses || []).find(function (dose) {
+      return Math.abs(gallons * dose.oz - total) < 0.051;
+    }) || null;
+  }
+
+  function closestDose(product, rate) {
+    let best = null;
+    (product.doses || []).forEach(function (dose) {
+      const dist = Math.abs(dose.oz - rate);
+      if (!best || dist < best.dist) best = { dose: dose, dist: dist };
+    });
+    return best ? best.dose : null;
+  }
+
+  function doseList(product) {
+    return (product.doses || []).map(function (dose) {
+      return formatAmount(dose.oz, product.unit);
+    }).join(", ");
+  }
+
+  function coachGroup(tech, product, rows) {
+    const stops = rows.reduce(function (sum, row) { return sum + (row.stops || 1); }, 0);
+    const firstTotal = rows[0].totalOz;
+    const same = rows.every(function (row) { return closeAmount(row.totalOz, firstTotal); });
+    const repeated = same && stops >= 4;
+    const mathProblems = [];
+    const overProblems = [];
+    const gallonLabels = [];
+
+    rows.forEach(function (row) {
+      const gallons = Number(row.gallons);
+      const hasGallons = Number.isFinite(gallons) && gallons > 0;
+      if (hasGallons) gallonLabels.push(speakNumber(gallons));
+      if (product.kind !== "mix" || !hasGallons) return;
+      const given = Number(row.ozPerGallon);
+      const hasDose = Number.isFinite(given) && given > 0;
+      const sqft = Number(row.sqft) || 0;
+      const linearFeet = Number(row.linearFeet) || 0;
+      if (hasDose) {
+        const right = gallons * given;
+        if (Math.abs(right - row.totalOz) > 0.051) {
+          mathProblems.push({ gallons: gallons, dose: given, wrote: row.totalOz, right: right, stops: row.stops || 1 });
+          return;
+        }
+        const checked = calculate({
+          product: product,
+          gallons: gallons,
+          ozPerGallon: given,
+          sqft: sqft,
+          linearFeet: linearFeet,
+          pests: row.pests || [],
+          useFoundationLimit: !!row.useFoundationLimit,
+        });
+        if (checked.status === "bad-dose" || checked.status === "over") {
+          overProblems.push({ calc: checked, gallons: gallons, dose: given, wrote: row.totalOz });
+        }
+        return;
+      }
+      const matched = labelDoseForTotal(product, gallons, row.totalOz);
+      if (!matched) {
+        const near = closestDose(product, row.totalOz / gallons);
+        mathProblems.push({
+          gallons: gallons,
+          dose: near ? near.oz : null,
+          wrote: row.totalOz,
+          right: near ? gallons * near.oz : null,
+          stops: row.stops || 1,
+          inferred: true,
+        });
+        return;
+      }
+      if (sqft > 0 || (row.useFoundationLimit && linearFeet > 0)) {
+        const checked = calculate({
+          product: product,
+          gallons: gallons,
+          ozPerGallon: matched.oz,
+          sqft: sqft,
+          linearFeet: linearFeet,
+          pests: row.pests || [],
+          useFoundationLimit: !!row.useFoundationLimit,
+        });
+        if (checked.status === "over") overProblems.push({ calc: checked, gallons: gallons, dose: matched.oz, wrote: row.totalOz });
+      }
+    });
+
+    if (!mathProblems.length && !overProblems.length && !repeated) return null;
+
+    const distinctGallons = gallonLabels.filter(function (label, index) { return gallonLabels.indexOf(label) === index; });
+    const wrote = sayAmount(firstTotal, product);
+    const sentences = [];
+    sentences.push(tech + ", you wrote " + wrote + " of " + product.name + " on " + stops + (stops === 1 ? " stop" : " stops") + ".");
+
+    let kind = "repeat";
+    if (overProblems.length) {
+      kind = "over";
+      sentences.push(overProblems[0].calc.reason);
+      sentences.push("Before you save the next one, change the gallons or the dose so the rate stays inside that label line.");
+    } else if (mathProblems.length) {
+      kind = "math";
+      const problem = mathProblems[0];
+      if (problem.inferred) {
+        sentences.push(speakNumber(problem.gallons) + " gallons with " + sayAmount(problem.wrote, product) + " written down is " + speakNumber(problem.wrote / problem.gallons) + " per gallon.");
+        sentences.push("That is not a " + product.name + " rate on this list. The saved rates are " + doseList(product) + ".");
+        if (problem.right != null) {
+          sentences.push("The closest one makes " + sayAmount(problem.right, product) + " in " + speakNumber(problem.gallons) + " gallons. Write that if it is what you poured, or write the rate you actually poured.");
+        }
+      } else {
+        sentences.push(speakNumber(problem.gallons) + " gallons at " + formatAmount(problem.dose, product.unit) + " per gallon is " + sayAmount(problem.right, product) + ".");
+        sentences.push("You wrote " + sayAmount(problem.wrote, product) + ". Next time, put " + sayAmount(problem.right, product) + " in Total Concen.");
+      }
+      if (repeated) sentences.push("The same total is also on " + stops + " stops. It has to change when the gallons change.");
+    } else if (product.kind === "mix") {
+      const low = product.doses[0];
+      if (distinctGallons.length > 1) {
+        sentences.push("The gallons on those stops were " + distinctGallons.join(" and ") + ", and Total Concen stayed " + wrote + ".");
+      }
+      sentences.push("Total Concen is the gallons times the dose. 1 gallon at " + formatAmount(low.oz, product.unit) + " per gallon is " + sayAmount(low.oz, product) + ". 2 gallons at that dose is " + sayAmount(low.oz * 2, product) + ".");
+      sentences.push("If a house used different gallons, write the new number. If it really was the same gallons and the same dose, leave it, and fill in Finished Dilution so the gallons are on the job.");
+    } else {
+      sentences.push("If a house used a different number of " + product.unit + ", write that number. Leave " + wrote + " only when that is what you put out.");
+    }
+
+    const check = product.kind === "mix"
+      ? "Next week, look at " + product.name + " again. Finished Dilution should be filled in, and Total Concen should move when the gallons move."
+      : "Next week, look at " + product.name + " again. The count should change when the stop used a different number.";
+
+    const headline = kind === "over"
+      ? "Over the label rate saved here"
+      : (kind === "math" ? "Total Concen does not match the gallons" : "Same " + wrote + " on " + stops + " stops");
+
+    const detailParts = [stops + (stops === 1 ? " stop" : " stops") + " at " + wrote];
+    if (distinctGallons.length) detailParts.push("gallons " + distinctGallons.join(", "));
+    const dosesSeen = rows.map(function (row) { return Number(row.ozPerGallon); }).filter(function (n) { return n > 0; });
+    if (dosesSeen.length) detailParts.push("dose " + dosesSeen.map(speakNumber).filter(function (label, index, list) { return list.indexOf(label) === index; }).join(", "));
+
+    return {
+      tech: tech,
+      productId: product.id,
+      productName: product.name,
+      kind: kind,
+      headline: headline,
+      detail: detailParts.join(". ") + ".",
+      say: sentences.join(" "),
+      check: check,
+    };
+  }
+
+  function coachWeek(entries) {
+    const groups = {};
+    (entries || []).forEach(function (entry) {
+      const product = findProduct(entry.productId) || findProduct(entry.productName);
+      const tech = String(entry.tech || "").trim();
+      const totalOz = Number(entry.totalOz);
+      if (!product || !tech || !(totalOz > 0)) return;
+      const key = tech.toLowerCase() + "\n" + product.id;
+      if (!groups[key]) groups[key] = { tech: tech, product: product, rows: [] };
+      groups[key].rows.push({
+        totalOz: totalOz,
+        gallons: entry.gallons,
+        ozPerGallon: entry.ozPerGallon,
+        sqft: entry.sqft,
+        linearFeet: entry.linearFeet,
+        stops: entry.stops || 1,
+        pests: entry.pests || [],
+        useFoundationLimit: !!entry.useFoundationLimit,
+      });
+    });
+
+    const byTech = {};
+    Object.keys(groups).forEach(function (key) {
+      const group = groups[key];
+      const note = coachGroup(group.tech, group.product, group.rows);
+      if (!byTech[group.tech]) byTech[group.tech] = { tech: group.tech, notes: [], clean: true };
+      if (note) {
+        byTech[group.tech].notes.push(note);
+        byTech[group.tech].clean = false;
+      }
+    });
+
+    const rank = { over: 0, math: 1, repeat: 2 };
+    const techs = Object.keys(byTech).map(function (name) { return byTech[name]; });
+    techs.sort(function (a, b) { return a.tech.localeCompare(b.tech); });
+    techs.forEach(function (bucket) {
+      bucket.notes.sort(function (a, b) { return rank[a.kind] - rank[b.kind]; });
+    });
+
+    return {
+      empty: techs.length === 0,
+      flagged: techs.filter(function (bucket) { return bucket.notes.length > 0; }),
+      clear: techs.filter(function (bucket) { return bucket.notes.length === 0; }).map(function (bucket) { return bucket.tech; }),
+    };
+  }
+
+  function coachingScript(report) {
+    if (!report || report.empty) return "No stops entered yet.";
+    if (!report.flagged.length) return "Nothing to coach this week. The lines entered match the label math saved here.";
+    return report.flagged.map(function (bucket) {
+      return bucket.notes.map(function (note) {
+        return note.tech + " — " + note.productName + "\n" + note.say + "\n" + note.check;
+      }).join("\n\n");
+    }).join("\n\n");
+  }
+
   function buildSlip(fields) {
     const product = fields.product;
     const result = fields.result;
@@ -276,6 +562,10 @@
     findDose: findDose,
     calculate: calculate,
     sameAmountStreak: sameAmountStreak,
+    findProduct: findProduct,
+    parseUsage: parseUsage,
+    coachWeek: coachWeek,
+    coachingScript: coachingScript,
     buildSlip: buildSlip,
     foundationMaxGallons: foundationMaxGallons,
   };

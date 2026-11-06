@@ -106,6 +106,67 @@ test("the same concentrate four stops in a row is a streak", () => {
   assert.equal(calc.sameAmountStreak(history, { tech: "Ben", productId: "bifen-it", totalOz: 0.5 }), false);
 });
 
+test("a pasted week flags a repeated amount and a bad total", () => {
+  const parsed = calc.parseUsage([
+    "Joseph, Bifen I/T, 0.50 floz, 6 stops",
+    "David, Cyzmic CS, 0.50 floz, 1.5 gal, 0.40 per gal",
+    "Sam, Bifen I/T, 0.50 floz, 1.5 gal, 1500 sq ft",
+  ].join("\n"));
+  assert.equal(parsed.entries.length, 3);
+  assert.equal(parsed.entries[0].stops, 6);
+  assert.equal(parsed.entries[1].ozPerGallon, 0.4);
+  assert.equal(parsed.entries[2].sqft, 1500);
+  const report = calc.coachWeek(parsed.entries);
+  const joseph = report.flagged.find((bucket) => bucket.tech === "Joseph");
+  assert.equal(joseph.notes[0].kind, "repeat");
+  assert.match(joseph.notes[0].say, /0\.50 floz/);
+  assert.match(joseph.notes[0].say, /6 stops/);
+  assert.match(joseph.notes[0].say, /Finished Dilution/);
+  const david = report.flagged.find((bucket) => bucket.tech === "David");
+  assert.equal(david.notes[0].kind, "math");
+  assert.match(david.notes[0].say, /0\.60 floz/);
+  assert.ok(report.clear.includes("Sam"));
+});
+
+test("the same written total is not bad math when it matches a label rate", () => {
+  const report = calc.coachWeek([{
+    tech: "Ben",
+    productId: "bifen-it",
+    totalOz: 0.5,
+    gallons: 1.5,
+    stops: 1,
+  }]);
+  assert.equal(report.flagged.length, 0);
+  assert.deepEqual(report.clear, ["Ben"]);
+});
+
+test("a rate over the Bifen ceiling is the first thing to say", () => {
+  const report = calc.coachWeek([{
+    tech: "Ross",
+    productId: "bifen-it",
+    totalOz: 1.5,
+    gallons: 1.5,
+    ozPerGallon: 1,
+    sqft: 1000,
+    stops: 1,
+  }]);
+  assert.equal(report.flagged[0].notes[0].kind, "over");
+  assert.match(report.flagged[0].notes[0].say, /1\.50 floz per 1,000/);
+  assert.match(calc.coachingScript(report), /Ross — Bifen I\/T/);
+});
+
+test("four identical bait counts ask for the real number", () => {
+  const report = calc.coachWeek([{
+    tech: "Kimbre",
+    productId: "final-blox",
+    totalOz: 4,
+    stops: 5,
+  }]);
+  assert.equal(report.flagged[0].notes[0].kind, "repeat");
+  assert.match(report.flagged[0].notes[0].say, /4 blocks/);
+  assert.match(report.flagged[0].notes[0].say, /different number/);
+});
+
 test("the slip uses master-list wording", () => {
   const result = calc.calculate({
     product: byId["bifen-it"],
